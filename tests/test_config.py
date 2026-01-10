@@ -73,6 +73,7 @@ def nested_config_dict() -> dict[str, Any]:
 # =============================================================================
 
 
+@pytest.mark.unit
 class TestConfigFileDiscovery:
     """Tests for config file discovery and loading."""
 
@@ -173,6 +174,7 @@ class TestConfigFileDiscovery:
 # =============================================================================
 
 
+@pytest.mark.unit
 class TestConfigFileParsing:
     """Tests for YAML config file parsing."""
 
@@ -240,6 +242,7 @@ class TestConfigFileParsing:
 # =============================================================================
 
 
+@pytest.mark.unit
 class TestEnvVarInterpolation:
     """Tests for environment variable interpolation in strings."""
 
@@ -290,6 +293,7 @@ class TestEnvVarInterpolation:
 # =============================================================================
 
 
+@pytest.mark.unit
 class TestFlattenConfig:
     """Tests for flattening nested config to flat dict."""
 
@@ -341,6 +345,7 @@ class TestFlattenConfig:
 # =============================================================================
 
 
+@pytest.mark.unit
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 

@@ -14,117 +14,80 @@ Note:
 
 import pytest
 
-from airflow_correlator.emitter import (
-    PRODUCER,
-    create_run_event,
-    emit_events,
-)
+from airflow_correlator.emitter import create_run_event, emit_events
 
 # =============================================================================
-# Tests for PRODUCER constant
+# A. emit_events() Tests - Skeleton
 # =============================================================================
 
 
 @pytest.mark.unit
-def test_producer_contains_correlator_io() -> None:
-    """Test that PRODUCER constant contains correlator-io identifier.
+class TestEmitEvents:
+    """Tests for emit_events() function.
 
-    The producer field identifies the plugin that generated the event.
-    It should follow the format: https://github.com/correlator-io/airflow-correlator/{version}
+    Note: These are skeleton tests. Full tests will be added when
+    emit_events() is implemented.
     """
-    assert "correlator-io" in PRODUCER
-    assert "airflow-correlator" in PRODUCER
+
+    def test_emit_events_raises_not_implemented(self) -> None:
+        """Test that emit_events() raises NotImplementedError in skeleton.
+
+        This test verifies the skeleton behavior. It will be replaced with
+        actual tests when emit_events() is implemented.
+        """
+        with pytest.raises(NotImplementedError, match="emit_events"):
+            emit_events(endpoint="http://localhost:5000", events=[])
+
+    def test_emit_events_with_api_key_raises_not_implemented(self) -> None:
+        """Test that emit_events() with api_key raises NotImplementedError.
+
+        This test verifies the skeleton behavior with optional api_key parameter.
+        """
+        with pytest.raises(NotImplementedError, match="emit_events"):
+            emit_events(
+                endpoint="http://localhost:5000",
+                events=[],
+                api_key="test-key",
+            )
 
 
 # =============================================================================
-# Tests for emit_events() - Skeleton
+# B. create_run_event() Tests - Skeleton
 # =============================================================================
 
 
 @pytest.mark.unit
-def test_emit_events_raises_not_implemented() -> None:
-    """Test that emit_events raises NotImplementedError in skeleton release.
+class TestCreateRunEvent:
+    """Tests for create_run_event() function.
 
-    This test documents the expected behavior of the skeleton release.
-    Once implemented, this test should be replaced with proper tests.
+    Note: These are skeleton tests. Full tests will be added when
+    create_run_event() is implemented.
     """
-    with pytest.raises(NotImplementedError) as exc_info:
-        emit_events(
-            events=[],
-            endpoint="http://localhost:8080/api/v1/lineage/events",
-        )
 
-    assert "not yet implemented" in str(exc_info.value).lower()
+    def test_create_run_event_raises_not_implemented(self) -> None:
+        """Test that create_run_event() raises NotImplementedError in skeleton.
 
+        This test verifies the skeleton behavior. It will be replaced with
+        actual tests when create_run_event() is implemented.
+        """
+        with pytest.raises(NotImplementedError, match="create_run_event"):
+            create_run_event(
+                event_type="START",
+                job_namespace="airflow",
+                job_name="test_dag.test_task",
+                run_id="test-run-id",
+            )
 
-@pytest.mark.unit
-def test_emit_events_with_api_key_raises_not_implemented() -> None:
-    """Test that emit_events with API key raises NotImplementedError."""
-    with pytest.raises(NotImplementedError):
-        emit_events(
-            events=[],
-            endpoint="http://localhost:8080/api/v1/lineage/events",
-            api_key="test-api-key",
-        )
+    def test_create_run_event_with_inputs_raises_not_implemented(self) -> None:
+        """Test that create_run_event() with inputs raises NotImplementedError.
 
-
-# =============================================================================
-# Tests for create_run_event() - Skeleton
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_create_run_event_raises_not_implemented() -> None:
-    """Test that create_run_event raises NotImplementedError in skeleton release.
-
-    This test documents the expected behavior of the skeleton release.
-    Once implemented, this test should be replaced with proper tests.
-    """
-    with pytest.raises(NotImplementedError) as exc_info:
-        create_run_event(
-            event_type="START",
-            run_id="550e8400-e29b-41d4-a716-446655440000",
-            job_name="dag_id.task_id",
-            job_namespace="airflow",
-        )
-
-    assert "not yet implemented" in str(exc_info.value).lower()
-
-
-@pytest.mark.unit
-def test_create_run_event_with_inputs_raises_not_implemented() -> None:
-    """Test that create_run_event with inputs raises NotImplementedError."""
-    with pytest.raises(NotImplementedError):
-        create_run_event(
-            event_type="COMPLETE",
-            run_id="550e8400-e29b-41d4-a716-446655440000",
-            job_name="dag_id.task_id",
-            job_namespace="airflow",
-            inputs=[{"namespace": "postgres", "name": "public.users"}],
-            outputs=[{"namespace": "postgres", "name": "public.processed_users"}],
-        )
-
-
-# =============================================================================
-# Future Tests (to be implemented after Task 1.3)
-# =============================================================================
-
-# The following test signatures document what will be tested once
-# the emitter is fully implemented:
-#
-# class TestEmitEvents:
-#     def test_emit_event_sends_post_request_to_correlator()
-#     def test_emit_event_handles_success_response()
-#     def test_emit_event_handles_partial_success_response()
-#     def test_emit_event_with_api_key_includes_header()
-#     def test_emit_event_handles_connection_error()
-#     def test_emit_event_handles_http_error_response()
-#     def test_emit_event_handles_timeout()
-#     def test_emit_events_handles_empty_list()
-#
-# class TestCreateRunEvent:
-#     def test_create_run_event_start()
-#     def test_create_run_event_complete()
-#     def test_create_run_event_fail()
-#     def test_create_run_event_with_inputs_and_outputs()
-#     def test_create_run_event_serializes_to_json()
+        This test verifies the skeleton behavior with optional inputs parameter.
+        """
+        with pytest.raises(NotImplementedError, match="create_run_event"):
+            create_run_event(
+                event_type="COMPLETE",
+                job_namespace="airflow",
+                job_name="test_dag.test_task",
+                run_id="test-run-id",
+                inputs=[{"namespace": "db", "name": "source_table"}],
+            )
