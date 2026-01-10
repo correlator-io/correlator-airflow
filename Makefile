@@ -390,7 +390,7 @@ build-package:
 
 help:
 	@echo "***************************************************************"
-	@echo "*            🔗 correlator-airflow Development                *"
+	@echo "*            🔗 airflow-correlator Development                *"
 	@echo "***************************************************************"
 	@echo ""
 	@echo "🚀 Getting Started:"
