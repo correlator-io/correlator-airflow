@@ -1,93 +1,669 @@
-"""Tests for OpenLineage event emitter module.
+"""Tests for emitter module.
 
-This module contains tests for constructing OpenLineage events and
-emitting them to Correlator.
+This module tests the HTTP emitter that sends OpenLineage events to Correlator.
 
 Test Coverage:
-    - emit_events(): Send events to OpenLineage backend
-    - create_run_event(): Build OpenLineage RunEvent
-
-Note:
-    This is a skeleton test file. Full tests will be added after
-    Task 1.3 (Core listener implementation) is complete.
+    - PRODUCER constant format
+    - _serialize_attr_value(): Custom serializer
+    - emit_events(): HTTP communication with Correlator
+    - _handle_response(): Response code handling (200/204, 207, 4xx, 5xx)
 """
 
+import json
+import logging
+from datetime import datetime
+from uuid import UUID
+
+import attr
 import pytest
+import requests
+import responses
 
-from airflow_correlator.emitter import create_run_event, emit_events
+from airflow_correlator.emitter import (
+    PRODUCER,
+    _serialize_attr_value,
+    emit_events,
+)
 
 # =============================================================================
-# A. emit_events() Tests - Skeleton
+# Test Fixtures - Mock RunEvent-like objects
+# =============================================================================
+
+
+@attr.define
+class MockRun:
+    """Mock OpenLineage Run object."""
+
+    runId: str
+
+
+@attr.define
+class MockJob:
+    """Mock OpenLineage Job object."""
+
+    namespace: str
+    name: str
+
+
+@attr.define
+class MockRunEvent:
+    """Mock OpenLineage RunEvent for testing."""
+
+    eventType: str
+    eventTime: datetime
+    run: MockRun
+    job: MockJob
+
+
+def create_mock_event(
+    event_type: str = "START",
+    run_id: str = "test-run-123",
+    namespace: str = "airflow",
+    job_name: str = "dag.task",
+) -> MockRunEvent:
+    """Create a mock RunEvent for testing."""
+    return MockRunEvent(
+        eventType=event_type,
+        eventTime=datetime(2024, 1, 15, 10, 30, 0),
+        run=MockRun(runId=run_id),
+        job=MockJob(namespace=namespace, name=job_name),
+    )
+
+
+# =============================================================================
+# A. PRODUCER Constant Tests
 # =============================================================================
 
 
 @pytest.mark.unit
-class TestEmitEvents:
-    """Tests for emit_events() function.
+class TestProducerConstant:
+    """Tests for PRODUCER constant."""
 
-    Note: These are skeleton tests. Full tests will be added when
-    emit_events() is implemented.
-    """
+    def test_producer_contains_repo_url(self) -> None:
+        """PRODUCER contains correlator-airflow GitHub URL."""
+        assert "https://github.com/correlator-io/correlator-airflow" in PRODUCER
 
-    def test_emit_events_raises_not_implemented(self) -> None:
-        """Test that emit_events() raises NotImplementedError in skeleton.
+    def test_producer_contains_version(self) -> None:
+        """PRODUCER contains version string."""
+        assert "/" in PRODUCER
+        parts = PRODUCER.split("/")
+        assert len(parts) >= 5
 
-        This test verifies the skeleton behavior. It will be replaced with
-        actual tests when emit_events() is implemented.
-        """
-        with pytest.raises(NotImplementedError, match="emit_events"):
-            emit_events(endpoint="http://localhost:5000", events=[])
 
-    def test_emit_events_with_api_key_raises_not_implemented(self) -> None:
-        """Test that emit_events() with api_key raises NotImplementedError.
+# =============================================================================
+# B. _serialize_attr_value() Tests
+# =============================================================================
 
-        This test verifies the skeleton behavior with optional api_key parameter.
-        """
-        with pytest.raises(NotImplementedError, match="emit_events"):
+
+@pytest.mark.unit
+class TestSerializeAttrValue:
+    """Tests for _serialize_attr_value helper function."""
+
+    def test_serializes_datetime_to_isoformat(self) -> None:
+        """Datetime values are serialized to ISO 8601 format."""
+        dt = datetime(2024, 1, 15, 10, 30, 0)
+        result = _serialize_attr_value(None, None, dt)
+        assert result == "2024-01-15T10:30:00"
+
+    def test_serializes_datetime_with_microseconds(self) -> None:
+        """Datetime with microseconds is serialized correctly."""
+        dt = datetime(2024, 1, 15, 10, 30, 0, 123456)
+        result = _serialize_attr_value(None, None, dt)
+        assert result == "2024-01-15T10:30:00.123456"
+
+    def test_serializes_uuid_to_string(self) -> None:
+        """UUID values are serialized to string."""
+        uid = UUID("12345678-1234-5678-1234-567812345678")
+        result = _serialize_attr_value(None, None, uid)
+        assert result == "12345678-1234-5678-1234-567812345678"
+
+    def test_passthrough_string_unchanged(self) -> None:
+        """String values pass through unchanged."""
+        result = _serialize_attr_value(None, None, "test_string")
+        assert result == "test_string"
+
+    def test_passthrough_integer_unchanged(self) -> None:
+        """Integer values pass through unchanged."""
+        result = _serialize_attr_value(None, None, 123)
+        assert result == 123
+
+    def test_passthrough_none_unchanged(self) -> None:
+        """None values pass through unchanged."""
+        result = _serialize_attr_value(None, None, None)
+        assert result is None
+
+
+# =============================================================================
+# C. emit_events() Success Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEmitEventsSuccess:
+    """Tests for successful event emission."""
+
+    @responses.activate
+    def test_emit_events_success_200(self) -> None:
+        """Successful event emission with 200 OK."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={
+                "status": "success",
+                "summary": {"received": 1, "successful": 1, "failed": 0},
+            },
+            status=200,
+        )
+
+        event = create_mock_event()
+        emit_events([event], "http://localhost:8080/api/v1/lineage/events")
+
+        assert len(responses.calls) == 1
+
+    @responses.activate
+    def test_emit_events_success_204(self) -> None:
+        """Successful event emission with 204 No Content."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            status=204,
+        )
+
+        event = create_mock_event()
+        emit_events([event], "http://localhost:8080/api/v1/lineage/events")
+
+        assert len(responses.calls) == 1
+
+    @responses.activate
+    def test_emit_events_serializes_runevent(self) -> None:
+        """RunEvent objects are serialized to JSON."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        event = create_mock_event(
+            event_type="COMPLETE",
+            run_id="run-456",
+            namespace="my-namespace",
+            job_name="my-dag.my-task",
+        )
+        emit_events([event], "http://localhost:8080/api/v1/lineage/events")
+
+        sent_body = json.loads(responses.calls[0].request.body)
+        assert isinstance(sent_body, list)
+        assert len(sent_body) == 1
+        assert sent_body[0]["eventType"] == "COMPLETE"
+        assert sent_body[0]["eventTime"] == "2024-01-15T10:30:00"
+        assert sent_body[0]["run"]["runId"] == "run-456"
+        assert sent_body[0]["job"]["namespace"] == "my-namespace"
+        assert sent_body[0]["job"]["name"] == "my-dag.my-task"
+
+    @responses.activate
+    def test_emit_events_sends_multiple_events(self) -> None:
+        """Multiple events are sent as JSON array."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        events = [
+            create_mock_event(event_type="START", run_id="run-1"),
+            create_mock_event(event_type="COMPLETE", run_id="run-1"),
+        ]
+        emit_events(events, "http://localhost:8080/api/v1/lineage/events")
+
+        sent_body = json.loads(responses.calls[0].request.body)
+        assert len(sent_body) == 2
+        assert sent_body[0]["eventType"] == "START"
+        assert sent_body[1]["eventType"] == "COMPLETE"
+
+    @responses.activate
+    def test_emit_events_sets_content_type_json(self) -> None:
+        """Request includes Content-Type: application/json header."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        emit_events(
+            [create_mock_event()], "http://localhost:8080/api/v1/lineage/events"
+        )
+
+        assert responses.calls[0].request.headers["Content-Type"] == "application/json"
+
+    @responses.activate
+    def test_emit_events_with_api_key_sets_header(self) -> None:
+        """API key is sent in X-API-Key header."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+            api_key="my-secret-key",
+        )
+
+        assert responses.calls[0].request.headers["X-API-Key"] == "my-secret-key"
+
+    @responses.activate
+    def test_emit_events_without_api_key_no_header(self) -> None:
+        """No X-API-Key header when api_key is None."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+            api_key=None,
+        )
+
+        assert "X-API-Key" not in responses.calls[0].request.headers
+
+    @responses.activate
+    def test_emit_events_logs_info_on_success(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """200 success logs INFO message."""
+        caplog.set_level(logging.INFO)
+
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={
+                "status": "success",
+                "summary": {"received": 1, "successful": 1, "failed": 0},
+            },
+            status=200,
+        )
+
+        emit_events(
+            [create_mock_event()], "http://localhost:8080/api/v1/lineage/events"
+        )
+
+        assert "Successfully emitted 1 events" in caplog.text
+        assert "1 successful" in caplog.text
+
+
+# =============================================================================
+# D. emit_events() Session Parameter Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEmitEventsSession:
+    """Tests for session parameter."""
+
+    @responses.activate
+    def test_emit_events_uses_provided_session(self) -> None:
+        """Provided session is used for HTTP request."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        session = requests.Session()
+        session.headers["X-Custom-Header"] = "custom-value"
+
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+            session=session,
+        )
+
+        assert responses.calls[0].request.headers["X-Custom-Header"] == "custom-value"
+
+    @responses.activate
+    def test_emit_events_creates_default_session_if_none(self) -> None:
+        """Default session is created if none provided."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+            session=None,
+        )
+
+        assert len(responses.calls) == 1
+
+
+# =============================================================================
+# E. emit_events() 207 Partial Success Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEmitEventsPartialSuccess:
+    """Tests for 207 partial success response handling."""
+
+    @responses.activate
+    def test_emit_events_207_does_not_raise(self) -> None:
+        """207 partial success does not raise exception."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={
+                "status": "partial_success",
+                "summary": {"received": 2, "successful": 1, "failed": 1},
+                "failed_events": [{"index": 1, "reason": "Invalid eventTime"}],
+            },
+            status=207,
+        )
+
+        events = [create_mock_event(), create_mock_event()]
+        emit_events(events, "http://localhost:8080/api/v1/lineage/events")
+
+    @responses.activate
+    def test_emit_events_207_logs_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """207 partial success logs warning with summary."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={
+                "status": "partial_success",
+                "summary": {"received": 3, "successful": 2, "failed": 1},
+                "failed_events": [{"index": 2, "reason": "Validation error"}],
+            },
+            status=207,
+        )
+
+        events = [create_mock_event() for _ in range(3)]
+        emit_events(events, "http://localhost:8080/api/v1/lineage/events")
+
+        assert "Partial success" in caplog.text
+        assert "2/3" in caplog.text
+
+    @responses.activate
+    def test_emit_events_207_logs_failed_event_reasons(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """207 partial success logs reasons for failed events."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={
+                "status": "partial_success",
+                "summary": {"received": 2, "successful": 1, "failed": 1},
+                "failed_events": [
+                    {"index": 0, "reason": "eventTime is required"},
+                ],
+            },
+            status=207,
+        )
+
+        events = [create_mock_event(), create_mock_event()]
+        emit_events(events, "http://localhost:8080/api/v1/lineage/events")
+
+        assert "eventTime is required" in caplog.text
+        assert "Event 0 failed" in caplog.text
+
+
+# =============================================================================
+# F. emit_events() Error Response Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEmitEventsErrors:
+    """Tests for error response handling."""
+
+    @responses.activate
+    def test_emit_events_400_raises_valueerror(self) -> None:
+        """400 Bad Request raises ValueError."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"error": "Invalid JSON"},
+            status=400,
+        )
+
+        with pytest.raises(ValueError, match=r"rejected.*400"):
             emit_events(
-                endpoint="http://localhost:5000",
-                events=[],
-                api_key="test-key",
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
+            )
+
+    @responses.activate
+    def test_emit_events_422_raises_valueerror(self) -> None:
+        """422 Unprocessable Entity raises ValueError."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"error": "eventTime is required"},
+            status=422,
+        )
+
+        with pytest.raises(ValueError, match=r"rejected.*422"):
+            emit_events(
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
+            )
+
+    @responses.activate
+    def test_emit_events_429_raises_valueerror(self) -> None:
+        """429 Too Many Requests raises ValueError."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"error": "Rate limit exceeded"},
+            status=429,
+        )
+
+        with pytest.raises(ValueError, match="Rate limited"):
+            emit_events(
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
+            )
+
+    @responses.activate
+    def test_emit_events_500_raises_valueerror(self) -> None:
+        """500 Internal Server Error raises ValueError."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"error": "Internal server error"},
+            status=500,
+        )
+
+        with pytest.raises(ValueError, match="500"):
+            emit_events(
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
             )
 
 
 # =============================================================================
-# B. create_run_event() Tests - Skeleton
+# G. emit_events() Network Error Tests
 # =============================================================================
 
 
 @pytest.mark.unit
-class TestCreateRunEvent:
-    """Tests for create_run_event() function.
+class TestEmitEventsNetworkErrors:
+    """Tests for network error handling."""
 
-    Note: These are skeleton tests. Full tests will be added when
-    create_run_event() is implemented.
-    """
+    @responses.activate
+    def test_emit_events_timeout_raises_timeouterror(self) -> None:
+        """Request timeout raises TimeoutError."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            body=requests.exceptions.Timeout("Connection timed out"),
+        )
 
-    def test_create_run_event_raises_not_implemented(self) -> None:
-        """Test that create_run_event() raises NotImplementedError in skeleton.
-
-        This test verifies the skeleton behavior. It will be replaced with
-        actual tests when create_run_event() is implemented.
-        """
-        with pytest.raises(NotImplementedError, match="create_run_event"):
-            create_run_event(
-                event_type="START",
-                job_namespace="airflow",
-                job_name="test_dag.test_task",
-                run_id="test-run-id",
+        with pytest.raises(TimeoutError, match="Timeout"):
+            emit_events(
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
+                timeout=1,
             )
 
-    def test_create_run_event_with_inputs_raises_not_implemented(self) -> None:
-        """Test that create_run_event() with inputs raises NotImplementedError.
+    @responses.activate
+    def test_emit_events_connection_error_raises_connectionerror(self) -> None:
+        """Connection error raises ConnectionError."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            body=requests.exceptions.ConnectionError("Connection refused"),
+        )
 
-        This test verifies the skeleton behavior with optional inputs parameter.
-        """
-        with pytest.raises(NotImplementedError, match="create_run_event"):
-            create_run_event(
-                event_type="COMPLETE",
-                job_namespace="airflow",
-                job_name="test_dag.test_task",
-                run_id="test-run-id",
-                inputs=[{"namespace": "db", "name": "source_table"}],
+        with pytest.raises(ConnectionError, match="Connection error"):
+            emit_events(
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
             )
+
+
+# =============================================================================
+# H. emit_events() Timeout Parameter Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEmitEventsTimeout:
+    """Tests for timeout parameter."""
+
+    @responses.activate
+    def test_emit_events_default_timeout_is_30(self) -> None:
+        """Default timeout is 30 seconds (matches dbt-correlator)."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+        )
+
+        # responses library doesn't expose timeout, but verify call was made
+        assert len(responses.calls) == 1
+
+    @responses.activate
+    def test_emit_events_custom_timeout(self) -> None:
+        """Custom timeout is accepted."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+            timeout=60,
+        )
+
+        assert len(responses.calls) == 1
+
+
+# =============================================================================
+# I. emit_events() Edge Case Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEmitEventsEdgeCases:
+    """Tests for edge cases and error handling."""
+
+    @responses.activate
+    def test_emit_events_200_empty_body(self) -> None:
+        """200 with empty body doesn't crash."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            body="",
+            status=200,
+        )
+
+        # Should not raise
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+        )
+
+        assert len(responses.calls) == 1
+
+    @responses.activate
+    def test_emit_events_200_non_json_body(self) -> None:
+        """200 with non-JSON body doesn't crash."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            body="OK",
+            status=200,
+        )
+
+        # Should not raise
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+        )
+
+        assert len(responses.calls) == 1
+
+    @responses.activate
+    def test_emit_events_207_malformed_json(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """207 with malformed JSON logs warning but doesn't crash."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            body="not valid json",
+            status=207,
+        )
+
+        # Should not raise - fire-and-forget handles gracefully
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+        )
+
+        assert "could not parse response" in caplog.text
+
+    @responses.activate
+    def test_emit_events_207_missing_summary(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """207 with missing summary field logs warning."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "partial_success"},  # Missing summary
+            status=207,
+        )
+
+        # Should not raise
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",
+        )
+
+        # Should still log partial success
+        assert "Partial success" in caplog.text

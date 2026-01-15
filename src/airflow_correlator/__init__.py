@@ -1,29 +1,33 @@
-"""airflow-correlator: Emit Airflow task events as OpenLineage events.
+"""correlator-airflow: Custom OpenLineage transport for Correlator.
 
-This package provides an Airflow listener that captures task lifecycle events
-and emits OpenLineage events for automated incident correlation.
+This plugin provides a custom transport that integrates with Airflow's OpenLineage
+provider. The OpenLineage provider handles task lifecycle events and extraction,
+while our transport sends the events to Correlator's API.
 
 Key Features:
-    - Capture Airflow task START/COMPLETE/FAIL events
-    - Construct OpenLineage events with task metadata
-    - Emit events to Correlator or any OpenLineage-compatible backend
-    - Zero-friction integration with existing Airflow workflows
-
-Usage:
-    $ airflow-correlator --version
-    $ airflow-correlator config
+    - Zero-config integration with Airflow's OpenLineage provider
+    - Reuses all 50+ built-in OpenLineage extractors
+    - Array-wrapped events for Correlator API compatibility
+    - Fire-and-forget: lineage failures don't affect task execution
 
 Architecture:
-    - listener: Task lifecycle hook functions
-    - emitter: Construct and emit OpenLineage events
-    - config: Configuration file loading utilities
-    - cli: Command-line interface
+    Airflow Task → [OL Provider Listener] → [OL Extractors] → [CorrelatorTransport] → Correlator
+
+Requirements:
+    - Airflow 2.11.0+ ONLY (older versions NOT supported)
+    - apache-airflow-providers-openlineage>=2.0.0
+
+Configuration:
+    Option 1 - openlineage.yml:
+        transport:
+          type: correlator
+          url: http://localhost:8080
+          api_key: ${CORRELATOR_API_KEY}
+
+    Option 2 - Environment variable:
+        AIRFLOW__OPENLINEAGE__TRANSPORT='{"type": "correlator", "url": "http://localhost:8080"}'
 
 For detailed documentation, see: https://github.com/correlator-io/correlator-airflow
-
-Note:
-    This is a skeleton implementation. Full functionality will be added after
-    Task 1.2 research is complete.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -35,26 +39,16 @@ except PackageNotFoundError:
     # Package not installed (development mode without editable install)
     __version__ = "0.0.0+dev"
 
-__author__ = "Emmanuel King Kasulani"
-__email__ = "kasulani@gmail.com"
+__author__ = "Correlator Team"
 __license__ = "Apache-2.0"
 
 # Public API exports
 __all__ = [
+    "CorrelatorConfig",
+    "CorrelatorTransport",
     "__version__",
-    "create_run_event",
     "emit_events",
-    "flatten_config",
-    "load_yaml_config",
-    "on_task_instance_failed",
-    "on_task_instance_running",
-    "on_task_instance_success",
 ]
 
-from .config import flatten_config, load_yaml_config
-from .emitter import create_run_event, emit_events
-from .listener import (
-    on_task_instance_failed,
-    on_task_instance_running,
-    on_task_instance_success,
-)
+from airflow_correlator.emitter import emit_events
+from airflow_correlator.transport import CorrelatorConfig, CorrelatorTransport
