@@ -46,7 +46,6 @@ Examples:
 - [ ] Code coverage meets 90% threshold (`make run coverage`)
 - [ ] OpenLineage event structure is valid (for emitter changes)
 - [ ] Documentation updated where necessary (README.md, docstrings, etc.)
-- [ ] I have tested the listener with sample Airflow tasks (for listener/emitter changes)
 
 ## Additional Notes
 
