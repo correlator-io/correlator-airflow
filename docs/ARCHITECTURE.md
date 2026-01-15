@@ -1,68 +1,151 @@
 # Architecture
 
-> **Note:** This is a placeholder document. Full architecture documentation will be added after Task 1.7 (Integration test) is complete.
-
 ## Overview
 
-`correlator-airflow` is an Airflow plugin that emits OpenLineage events to Correlator for automated incident correlation.
+`correlator-airflow` provides a **custom OpenLineage transport** that sends Airflow lineage events to Correlator for
+automated incident correlation.
 
-## Components
+> **IMPORTANT:** This plugin requires **Airflow 2.11.0+ ONLY**. Older Airflow versions are NOT supported.
 
-### Listener (`listener.py`)
+## Architecture Approach: Custom Transport
 
-The listener hooks into Airflow's task lifecycle events:
+Unlike traditional Airflow plugins that implement listeners directly, `correlator-airflow` uses a **Custom OpenLineage
+Transport** approach. This design decision provides significant advantages:
 
-- `on_task_instance_running()` - Emits START event when task begins
-- `on_task_instance_success()` - Emits COMPLETE event when task succeeds
-- `on_task_instance_failed()` - Emits FAIL event when task fails
+### Why Transport (Not Listener)?
 
-### Emitter (`emitter.py`)
+| Aspect              | Listener Approach                   | Transport Approach (Chosen)        |
+|---------------------|-------------------------------------|------------------------------------|
+| **Extractor Logic** | Must reimplement all 50+ extractors | Reuses all built-in OL extractors  |
+| **Maintenance**     | High - track OL spec changes        | Low - OL provider handles changes  |
+| **Code Size**       | ~2000+ lines                        | ~150 lines                         |
+| **Compatibility**   | Tied to specific Airflow versions   | Works with any OL provider version |
 
-Constructs and emits OpenLineage events to Correlator:
+### The Key Insight
 
-- `create_run_event()` - Creates OpenLineage RunEvent
-- `emit_events()` - Sends events via HTTP POST
-
-### Configuration (`config.py`)
-
-Handles configuration loading:
-
-- YAML config file (`.airflow-correlator.yml`)
-- Environment variable interpolation
-- Priority: CLI args > env vars > config file > defaults
-
-### CLI (`cli.py`)
-
-Minimal CLI for configuration and debugging:
-
-- `airflow-correlator --version` - Show version
-- `airflow-correlator --help` - Show help
+Correlator requires events wrapped in an array (`[{event}]`), but OpenLineage's `HttpTransport` sends single objects (
+`{event}`). This format incompatibility is the primary reason for our custom transport.
 
 ## Data Flow
 
 ```
-Airflow Task Execution
-        │
-        ▼
-┌───────────────────┐
-│  Listener Hooks   │
-│  (lifecycle)      │
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│  Event Emitter    │
-│  (OpenLineage)    │
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│    Correlator     │
-│    (backend)      │
-└───────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Airflow (2.11.0+)                             │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌──────────────┐    ┌─────────────────────┐    ┌───────────────────┐   │
+│  │ Airflow Task │───►│ OL Provider Listener│───►│  OL Extractors    │   │
+│  └──────────────┘    │ (built-in)          │    │  (50+ built-in)   │   │
+│                      └─────────────────────┘    └─────────┬─────────┘   │
+│                                                           │             │
+│                                                           ▼             │
+│                                                  ┌───────────────────┐  │
+│                                                  │ RunEvent object   │  │
+│                                                  └─────────┬─────────┘  │
+│                                                            │            │
+└────────────────────────────────────────────────────────────┼────────────┘
+                                                             │
+                                                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    correlator-airflow (this plugin)                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────────┐    ┌───────────────────┐    ┌──────────────┐   │
+│  │ CorrelatorTransport │───►│   emit_events()   │───►│ attr.asdict()│   │
+│  │ (receives RunEvent) │    │ (serializes event)│    │ (HTTP POST)  │   │
+│  └─────────────────────┘    └───────────────────┘    └──────┬───────┘   │
+│                                                             │           │
+└─────────────────────────────────────────────────────────────┼───────────┘
+                                                              │
+                                                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              Correlator                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  POST /api/v1/lineage/events                                            │
+│  Body: [{event}]  ◄── Array-wrapped (Correlator requirement)            │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## OpenLineage Event Structure
+## Components
+
+### Transport (`transport.py`)
+
+The core component that integrates with OpenLineage's transport system:
+
+```python
+class CorrelatorTransport(Transport):
+    """OpenLineage transport that sends events to Correlator."""
+
+    kind = "correlator"  # Used in openlineage.yml: type: correlator
+    config_class = CorrelatorConfig
+
+    def emit(self, event: RunEvent) -> None:
+        """Emit a single event to Correlator (wrapped in array)."""
+```
+
+**Key responsibilities:**
+
+- Receives `RunEvent` objects from OpenLineage provider
+- Creates and configures HTTP session (SSL verification, timeout)
+- Passes RunEvent to `emit_events()` (which handles serialization)
+- Implements fire-and-forget pattern (errors logged, never raised)
+
+### Emitter (`emitter.py`)
+
+Serialization and HTTP communication layer with Correlator:
+
+```python
+def emit_events(
+    events: list[Event],  # RunEvent, DatasetEvent, or JobEvent
+    endpoint: str,
+    api_key: Optional[str] = None,
+    session: Optional[requests.Session] = None,
+    timeout: int = 30,
+) -> None:
+    """Serialize and send events to Correlator's lineage endpoint."""
+```
+
+**Key responsibilities:**
+
+- Serializes RunEvent objects using `attr.asdict()` with custom datetime/UUID handling
+- Wraps events in array for Correlator API format
+- Uses pre-configured HTTP session (or creates default)
+- Handles all HTTP communication
+
+**Response handling:**
+
+- `200/204` - Success, log INFO message with summary
+- `207 Multi-Status` - Partial success, log warnings for failed events
+- `400/422` - Validation error, raise `ValueError`
+- `429` - Rate limited, raise `ValueError`
+- `5xx` - Server error, raise `ValueError`
+
+**Error propagation:**
+
+- Emitter raises exceptions on errors
+- Transport catches all exceptions (fire-and-forget)
+- This ensures lineage failures never affect Airflow task execution
+
+### Configuration (`config.py`)
+
+Configuration loading utilities:
+
+- YAML config file support (`.airflow-correlator.yml`)
+- Environment variable interpolation (`${VAR_NAME}`)
+- Priority order: CLI args > env vars > config file > defaults
+
+### CLI (`cli.py`)
+
+Minimal CLI for version info and utilities:
+
+```bash
+airflow-correlator --version
+airflow-correlator --help
+```
+
+## OpenLineage Event Format
 
 Events follow the OpenLineage v1.0 specification:
 
@@ -70,7 +153,7 @@ Events follow the OpenLineage v1.0 specification:
 {
   "eventTime": "2024-01-01T12:00:00Z",
   "eventType": "START|COMPLETE|FAIL",
-  "producer": "https://github.com/correlator-io/airflow-correlator/{version}",
+  "producer": "https://github.com/correlator-io/correlator-airflow/{version}",
   "schemaURL": "https://openlineage.io/spec/1-0-0/OpenLineage.json",
   "run": {
     "runId": "{dag_run_id}.{task_id}"
@@ -79,17 +162,50 @@ Events follow the OpenLineage v1.0 specification:
     "namespace": "airflow",
     "name": "{dag_id}.{task_id}"
   },
-  "inputs": [...],
-  "outputs": [...]
+  "inputs": [
+    ...
+  ],
+  "outputs": [
+    ...
+  ]
 }
 ```
 
-## Integration Points
+## Configuration
 
-- **Airflow**: Task lifecycle hooks via `ListenerPlugin`
-- **Correlator**: HTTP POST to `/api/v1/lineage/events`
-- **OpenLineage**: Standard event format
+### Option 1: openlineage.yml (Recommended)
+
+```yaml
+transport:
+  type: correlator
+  url: http://localhost:8080
+  api_key: ${CORRELATOR_API_KEY}
+  timeout: 30
+  verify_ssl: true
+```
+
+### Option 2: Environment Variable
+
+```bash
+export AIRFLOW__OPENLINEAGE__TRANSPORT='{"type": "correlator", "url": "http://localhost:8080"}'
+```
+
+## Requirements
+
+- **Airflow 2.11.0+ ONLY** (older versions NOT supported)
+- `apache-airflow-providers-openlineage>=2.0.0`
+- `correlator-airflow` package installed
+
+## Fire-and-Forget Pattern
+
+Lineage emission follows a strict fire-and-forget pattern:
+
+1. **Emitter** raises exceptions on any error (connection, timeout, validation)
+2. **Transport** catches ALL exceptions and logs them
+3. **Result**: Airflow task execution is NEVER affected by lineage failures
+
+This design ensures observability doesn't impact reliability.
 
 ---
 
-*Full documentation will be added in Task 1.3 (Core listener implementation).*
+*Architecture last updated: January 14, 2026*

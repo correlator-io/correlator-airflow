@@ -266,13 +266,13 @@ make run test integration     # Requires Correlator running (~minutes)
 make run coverage             # With HTML report in htmlcov/
 
 # Specific test file (direct pytest)
-pytest tests/test_listener.py -v
+pytest tests/test_transport.py -v
 
 # Specific test function (direct pytest)
-pytest tests/test_listener.py::test_on_task_instance_running -v
+pytest tests/test_transport.py::TestCorrelatorTransportEmit -v
 
 # With coverage for specific module (direct pytest)
-pytest tests/test_listener.py --cov=airflow_correlator.listener --cov-report=term-missing
+pytest tests/test_transport.py --cov=airflow_correlator.transport --cov-report=term-missing
 ```
 
 ### Test Conventions
@@ -367,7 +367,7 @@ make fix                      # Auto-fix: format + fix lints + sort imports
 make run typecheck
 
 # Check specific file (direct mypy)
-mypy src/airflow_correlator/listener.py
+mypy src/airflow_correlator/transport.py
 
 # Ignore specific error (direct mypy)
 mypy --disable-error-code=import-untyped src/airflow_correlator/
@@ -487,7 +487,7 @@ pip install -e ".[dev]"
 pytest -vv
 
 # Run specific test
-pytest tests/test_listener.py::test_on_task_instance_running -vv
+pytest tests/test_transport.py::TestCorrelatorTransportEmit::test_emit_calls_emit_events_with_correct_params -vv
 
 # Show print statements
 pytest -s
@@ -592,8 +592,8 @@ git commit -s -m "minor: add feature"
 **Testing Specific Module**:
 ```bash
 # Test + coverage for single module
-pytest tests/test_listener.py \
-  --cov=airflow_correlator.listener \
+pytest tests/test_transport.py \
+  --cov=airflow_correlator.transport \
   --cov-report=term-missing \
   --cov-report=html
 ```
@@ -668,7 +668,7 @@ git commit -s -m "minor: add new feature"
 
 # Configure alias for convenience
 git config --global alias.cs "commit -s"
-git cs -m "patch: fix listener bug"
+git cs -m "patch: fix transport bug"
 ```
 
 #### **SSH Key Setup (Recommended)**

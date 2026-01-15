@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced Listener approach with Custom OpenLineage Transport
+- Requires Airflow 2.11.0+ (older versions NOT supported)
+- Configuration now via `openlineage.yml` or `AIRFLOW__OPENLINEAGE__TRANSPORT`
+
+### Removed
+
+- Removed `listener.py` - not needed with Transport approach
+- Removed `config.py` - configuration handled by OpenLineage config loader
+
 ## [0.0.1] - 2026-01-09
 
 ### Added
