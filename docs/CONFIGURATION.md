@@ -1,118 +1,206 @@
 # Configuration
 
-> **Note:** This is a placeholder document. Full configuration documentation will be added after Task 1.7 (Integration
-> test) is complete.
-
 ## Overview
 
-`correlator-airflow` can be configured through:
+`correlator-airflow` provides a **custom OpenLineage transport** that sends Airflow lineage events to Correlator.
+Configuration is done through OpenLineage's standard configuration mechanisms.
 
-1. **Environment variables** (highest priority)
-2. **Configuration file** (`.airflow-correlator.yml`)
-3. **Airflow connections** (for credentials)
+> **IMPORTANT:** Requires **Airflow 2.11.0+** and `apache-airflow-providers-openlineage>=2.0.0`
 
-## Environment Variables
-
-| Variable              | Description                           | Default |
-|-----------------------|---------------------------------------|---------|
-| `CORRELATOR_ENDPOINT` | Correlator API endpoint               | -       |
-| `CORRELATOR_API_KEY`  | API key for authentication            | -       |
-| `OPENLINEAGE_URL`     | Fallback endpoint (dbt-ol compatible) | -       |
-| `OPENLINEAGE_API_KEY` | Fallback API key (dbt-ol compatible)  | -       |
-
-### Priority Order
-
-```
-CLI args > CORRELATOR_* env vars > OPENLINEAGE_* env vars > config file > defaults
-```
-
-## Configuration File
-
-Create `.airflow-correlator.yml` in your project directory:
-
-```yaml
-correlator:
-  endpoint: http://localhost:8080/api/v1/lineage/events
-  namespace: airflow
-  api_key: ${CORRELATOR_API_KEY}  # Environment variable interpolation
-```
-
-### File Locations
-
-The plugin searches for configuration files in this order:
-
-1. Explicit path via `--config` option
-2. `.airflow-correlator.yml` in current directory
-3. `.airflow-correlator.yaml` in current directory
-4. `.airflow-correlator.yml` in home directory
-5. `.airflow-correlator.yaml` in home directory
-
-## Airflow Configuration
-
-### Enable the Listener
-
-Add to your `airflow.cfg`:
-
-```ini
-[core]
-# Enable OpenLineage listener
-executor_callback_class = airflow_correlator.listener.CorrelatorLineageListener
-```
-
-Or via environment variable:
-
-```bash
-export AIRFLOW__CORE__EXECUTOR_CALLBACK_CLASS=airflow_correlator.listener.CorrelatorLineageListener
-```
-
-### Connection Configuration
-
-Create an Airflow connection for Correlator credentials:
-
-```bash
-airflow connections add correlator \
-  --conn-type http \
-  --conn-host localhost \
-  --conn-port 8080 \
-  --conn-schema https \
-  --conn-password your-api-key
-```
+---
 
 ## Configuration Options
 
-| Option                 | Type   | Description                                |
-|------------------------|--------|--------------------------------------------|
-| `correlator.endpoint`  | string | Correlator API endpoint URL                |
-| `correlator.namespace` | string | OpenLineage namespace (default: `airflow`) |
-| `correlator.api_key`   | string | API key for authentication                 |
+### Option 1: openlineage.yml (Recommended)
 
-## Examples
-
-### Minimal Configuration
+Create `openlineage.yml` in your Airflow home directory (`$AIRFLOW_HOME`):
 
 ```yaml
-# .airflow-correlator.yml
-correlator:
-  endpoint: http://localhost:8080/api/v1/lineage/events
-```
-
-### Production Configuration
-
-```yaml
-# .airflow-correlator.yml
-correlator:
-  endpoint: https://correlator.example.com/api/v1/lineage/events
-  namespace: production
+transport:
+  type: correlator
+  url: http://localhost:8080
   api_key: ${CORRELATOR_API_KEY}
 ```
 
-### Environment Variables Only
+### Option 2: Environment Variable
 
 ```bash
-export CORRELATOR_ENDPOINT=http://localhost:8080/api/v1/lineage/events
-export CORRELATOR_API_KEY=your-api-key
+export AIRFLOW__OPENLINEAGE__TRANSPORT='{"type": "correlator", "url": "http://localhost:8080"}'
 ```
 
 ---
 
-*Full documentation will be added in Task 1.3 (Core listener implementation).*
+## Configuration Options
+
+| Option       | Type   | Default    | Description                           |
+|--------------|--------|------------|---------------------------------------|
+| `url`        | string | (required) | Correlator API base URL               |
+| `api_key`    | string | null       | API key for X-API-Key header          |
+| `timeout`    | int    | 30         | Request timeout in seconds            |
+| `verify_ssl` | bool   | true       | Verify SSL certificates               |
+
+---
+
+## Environment Variable Interpolation
+
+Use `${VAR_NAME}` syntax in `openlineage.yml` for sensitive values:
+
+```yaml
+transport:
+  type: correlator
+  url: ${CORRELATOR_URL}
+  api_key: ${CORRELATOR_API_KEY}
+  timeout: 30
+  verify_ssl: true
+```
+
+---
+
+## Configuration Examples
+
+### Local Development
+
+```yaml
+# openlineage.yml
+transport:
+  type: correlator
+  url: http://localhost:8080
+  verify_ssl: false
+```
+
+### Production
+
+```yaml
+# openlineage.yml
+transport:
+  type: correlator
+  url: https://correlator.example.com
+  api_key: ${CORRELATOR_API_KEY}
+  timeout: 60
+  verify_ssl: true
+```
+
+### Environment Variable Only (No Config File)
+
+```bash
+# Set transport configuration as JSON
+export AIRFLOW__OPENLINEAGE__TRANSPORT='{
+  "type": "correlator",
+  "url": "https://correlator.example.com",
+  "api_key": "your-api-key",
+  "timeout": 30
+}'
+```
+
+---
+
+## How It Works
+
+The configuration is loaded by OpenLineage's transport discovery mechanism:
+
+1. OpenLineage provider reads `openlineage.yml` or `AIRFLOW__OPENLINEAGE__TRANSPORT`
+2. Finds `type: correlator` and looks up the registered transport
+3. Calls `CorrelatorConfig.from_dict()` with the configuration parameters
+4. Creates `CorrelatorTransport` instance with the config
+
+```
+openlineage.yml → OpenLineage Config Loader → CorrelatorConfig → CorrelatorTransport
+```
+
+---
+
+## File Locations
+
+OpenLineage searches for `openlineage.yml` in these locations (in order):
+
+1. Path specified by `OPENLINEAGE_CONFIG` environment variable
+2. Current working directory
+3. `$AIRFLOW_HOME` directory
+4. User's home directory (`~`)
+
+---
+
+## Verifying Configuration
+
+### Check Transport Registration
+
+```python
+from openlineage.client.transport import get_default_factory
+
+factory = get_default_factory()
+print(factory._transports)  # Should include 'correlator'
+```
+
+### Test Connection
+
+```bash
+# Send a test event to verify connectivity
+curl -X POST http://localhost:8080/api/v1/lineage/events \
+  -H "Content-Type: application/json" \
+  -d '[{
+    "eventTime": "2024-01-01T12:00:00Z",
+    "eventType": "START",
+    "producer": "https://github.com/correlator-io/correlator-airflow/test",
+    "schemaURL": "https://openlineage.io/spec/1-0-0/OpenLineage.json",
+    "run": {"runId": "test-run-123"},
+    "job": {"namespace": "airflow", "name": "test.task"}
+  }]'
+```
+
+---
+
+## Troubleshooting
+
+### Events Not Being Sent
+
+1. **Check OpenLineage is enabled:**
+   ```bash
+   # Ensure provider is installed
+   pip show apache-airflow-providers-openlineage
+   ```
+
+2. **Check transport configuration:**
+   ```bash
+   # Verify environment variable
+   echo $AIRFLOW__OPENLINEAGE__TRANSPORT
+   
+   # Or check openlineage.yml exists
+   cat $AIRFLOW_HOME/openlineage.yml
+   ```
+
+3. **Check Correlator is reachable:**
+   ```bash
+   curl http://localhost:8080/ping
+   # Expected: pong
+   ```
+
+### SSL Certificate Errors
+
+For self-signed certificates in development:
+
+```yaml
+transport:
+  type: correlator
+  url: https://localhost:8080
+  verify_ssl: false  # Only for development!
+```
+
+### Connection Timeouts
+
+Increase timeout for slow networks:
+
+```yaml
+transport:
+  type: correlator
+  url: http://correlator:8080
+  timeout: 60  # 60 seconds
+```
+
+---
+
+## Security Considerations
+
+1. **Never commit API keys** - Use environment variables with `${VAR_NAME}` syntax
+2. **Use HTTPS in production** - Always use TLS for production deployments
+3. **Don't disable SSL verification in production** - Only use `verify_ssl: false` for local development
+

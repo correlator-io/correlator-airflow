@@ -1,4 +1,4 @@
-# 🔗 airflow-correlator
+# correlator-airflow
 
 **Accelerate Airflow incident resolution with automated correlation**
 
@@ -16,21 +16,40 @@ Automatically connects Airflow task executions to incident correlation:
 - Emits OpenLineage events for task lifecycle (START/COMPLETE/FAIL)
 - Links task failures to upstream data quality issues
 - Provides direct navigation from incident to root cause
-- Works with your existing OpenLineage infrastructure
+- Reuses all 50+ built-in OpenLineage extractors
 
 ---
 
 ## Quick Start
 
+> **IMPORTANT:** Requires **Airflow 2.11.0+** and `apache-airflow-providers-openlineage>=2.0.0`
+
+### 1. Install
+
 ```bash
-# Install
-pip install correlator-airflow
-
-# Configure endpoint
-export CORRELATOR_ENDPOINT=http://localhost:8080/api/v1/lineage/events
-
-# Enable in Airflow (see Configuration docs)
+pip install correlator-airflow apache-airflow-providers-openlineage
 ```
+
+### 2. Configure OpenLineage Transport
+
+**Option A: openlineage.yml (Recommended)**
+
+Create `openlineage.yml` in your Airflow home directory:
+
+```yaml
+transport:
+  type: correlator
+  url: http://localhost:8080
+  api_key: ${CORRELATOR_API_KEY}
+```
+
+**Option B: Environment Variable**
+
+```bash
+export AIRFLOW__OPENLINEAGE__TRANSPORT='{"type": "correlator", "url": "http://localhost:8080"}'
+```
+
+### 3. Run Your DAGs
 
 That's it. Your Airflow task executions are now being correlated.
 
@@ -38,13 +57,13 @@ That's it. Your Airflow task executions are now being correlated.
 
 ## How It Works
 
-`airflow-correlator` hooks into Airflow's task lifecycle and emits OpenLineage events:
+`correlator-airflow` provides a **custom OpenLineage transport** that integrates with Airflow's built-in OpenLineage
+provider:
 
-1. **Task Starts** - Emits START event with task metadata
-2. **Task Completes** - Emits COMPLETE event with execution details
-3. **Task Fails** - Emits FAIL event with error information
-
-Events are sent to Correlator (or any OpenLineage-compatible backend) for correlation with dbt tests, Great Expectations validations, and other data quality signals.
+```
+Airflow Task → [OL Provider Listener] → [OL Extractors] → [CorrelatorTransport] → Correlator
+              └────── Built into Airflow ──────┘         └─── This plugin ───┘
+```
 
 See [Architecture](docs/ARCHITECTURE.md) for technical details.
 
@@ -52,9 +71,11 @@ See [Architecture](docs/ARCHITECTURE.md) for technical details.
 
 ## Why It Matters
 
-**The Problem:** When data pipelines fail, teams spend significant time manually hunting through Airflow logs, lineage graphs, and job histories to find the root cause.
+**The Problem:** When data pipelines fail, teams spend significant time manually hunting through Airflow logs, lineage
+graphs, and job histories to find the root cause.
 
-**What You Get:** Automated correlation between Airflow task executions and data quality test results, putting you in control of incidents instead of reacting to them.
+**What You Get:** Automated correlation between Airflow task executions and data quality test results, putting you in
+control of incidents instead of reacting to them.
 
 **Key Benefits:**
 
@@ -63,13 +84,8 @@ See [Architecture](docs/ARCHITECTURE.md) for technical details.
 - **Instant root cause**: Direct path from task failure to problematic upstream job
 - **Zero-friction setup**: Simple configuration, no code changes required
 
-**Built on Standards:** Uses OpenLineage, the industry standard for data lineage. No vendor lock-in, no proprietary formats.
-
----
-
-## Current Status
-
-> **Note:** This is a skeleton release (v0.0.0) for pipeline testing and PyPI name reservation. All functionality returns placeholder messages. Full implementation coming soon.
+**Built on Standards:** Uses OpenLineage, the industry standard for data lineage. No vendor lock-in, no proprietary
+formats.
 
 ---
 
@@ -105,14 +121,10 @@ The current version is in early development stage, so expect possible API change
 
 ## Requirements
 
-- Python 3.9+
-- Apache Airflow 2.7+ (with native OpenLineage support)
+- **Python 3.9+**
+- **Airflow 2.11.0+ ONLY** (older versions NOT supported)
+- `apache-airflow-providers-openlineage>=2.0.0`
 - [Correlator](https://github.com/correlator-io/correlator)
-
-**Airflow Compatibility:**
-
-- Tested with Airflow 2.7+
-- Uses Airflow's ListenerPlugin interface
 
 ---
 
