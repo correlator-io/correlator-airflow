@@ -44,6 +44,7 @@ Examples:
 - [ ] I have added/updated tests for the changes
 - [ ] All tests pass locally (`make run test`)
 - [ ] Code coverage meets 90% threshold (`make run coverage`)
+- [ ] Integration tests pass locally (`make run test integration`) — **required for patch/minor/major changes**
 - [ ] OpenLineage event structure is valid (for emitter changes)
 - [ ] Documentation updated where necessary (README.md, docstrings, etc.)
 
