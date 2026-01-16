@@ -290,12 +290,17 @@ class TestCorrelatorIntegration:
 # =============================================================================
 
 
-@pytest.fixture(scope="module", autouse=False)
+@pytest.fixture(
+    scope="module",
+    autouse=os.environ.get("CLEANUP_TEST_DATA", "false").lower() == "true",
+)
 def cleanup_test_events() -> None:
     """Clean up test events from database after all tests.
 
-    This fixture is NOT autouse - enable manually if needed.
+    This fixture is NOT autouse=true - enable manually if needed via environment flag.
     Usually test data is left for inspection after integration tests.
+    Usage:
+        CLEANUP_TEST_DATA=true make run test integration
     """
     yield  # Run tests first
 
