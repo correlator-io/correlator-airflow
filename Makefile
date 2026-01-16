@@ -234,7 +234,7 @@ run-test-unit:
 # Run: Execute integration tests only
 run-test-integration:
 	@echo "🧪 Running integration tests..."; \
-	$(UV) run pytest tests/integration -v; \
+	$(UV) run pytest tests/integration -v -m integration; \
 	EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo ""; \
