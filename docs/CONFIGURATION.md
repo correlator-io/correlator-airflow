@@ -9,9 +9,26 @@ Configuration is done through OpenLineage's standard configuration mechanisms.
 
 ---
 
+## Transport Type Names
+
+The transport type name depends on how you're using OpenLineage:
+
+| Context                                    | Transport Type                                     | Why                                       |
+|--------------------------------------------|----------------------------------------------------|-------------------------------------------|
+| **Airflow** (with OpenLineage provider)    | `correlator`                                       | Airflow's provider discovers entry points |
+| **OpenLineage Python client** (standalone) | `airflow_correlator.transport.CorrelatorTransport` | Client requires full module path          |
+
+---
+
 ## Configuration Options
 
-### Option 1: openlineage.yml (Recommended)
+### Option 1: Airflow Environment Variable (Recommended for Airflow)
+
+```bash
+export AIRFLOW__OPENLINEAGE__TRANSPORT='{"type": "correlator", "url": "http://localhost:8080"}'
+```
+
+### Option 2: openlineage.yml (For Airflow)
 
 Create `openlineage.yml` in your Airflow home directory (`$AIRFLOW_HOME`):
 
@@ -22,22 +39,27 @@ transport:
   api_key: ${CORRELATOR_API_KEY}
 ```
 
-### Option 2: Environment Variable
+### Option 3: openlineage.yml (For Standalone OpenLineage Client)
 
-```bash
-export AIRFLOW__OPENLINEAGE__TRANSPORT='{"type": "correlator", "url": "http://localhost:8080"}'
+When using the OpenLineage Python client directly (not through Airflow), use the full module path:
+
+```yaml
+transport:
+  type: airflow_correlator.transport.CorrelatorTransport
+  url: http://localhost:8080
+  api_key: ${CORRELATOR_API_KEY}
 ```
 
 ---
 
-## Configuration Options
+## Configuration Parameters
 
-| Option       | Type   | Default    | Description                           |
-|--------------|--------|------------|---------------------------------------|
-| `url`        | string | (required) | Correlator API base URL               |
-| `api_key`    | string | null       | API key for X-API-Key header          |
-| `timeout`    | int    | 30         | Request timeout in seconds            |
-| `verify_ssl` | bool   | true       | Verify SSL certificates               |
+| Option       | Type   | Default    | Description                  |
+|--------------|--------|------------|------------------------------|
+| `url`        | string | (required) | Correlator API base URL      |
+| `api_key`    | string | null       | API key for X-API-Key header |
+| `timeout`    | int    | 30         | Request timeout in seconds   |
+| `verify_ssl` | bool   | true       | Verify SSL certificates      |
 
 ---
 
@@ -58,20 +80,20 @@ transport:
 
 ## Configuration Examples
 
-### Local Development
+### Local Development (Airflow)
 
 ```yaml
-# openlineage.yml
+# openlineage.yml (in $AIRFLOW_HOME)
 transport:
   type: correlator
   url: http://localhost:8080
   verify_ssl: false
 ```
 
-### Production
+### Production (Airflow)
 
 ```yaml
-# openlineage.yml
+# openlineage.yml (in $AIRFLOW_HOME)
 transport:
   type: correlator
   url: https://correlator.example.com
@@ -80,7 +102,7 @@ transport:
   verify_ssl: true
 ```
 
-### Environment Variable Only (No Config File)
+### Airflow Environment Variable Only (No Config File)
 
 ```bash
 # Set transport configuration as JSON
@@ -90,6 +112,21 @@ export AIRFLOW__OPENLINEAGE__TRANSPORT='{
   "api_key": "your-api-key",
   "timeout": 30
 }'
+```
+
+### Standalone OpenLineage Client (Non-Airflow)
+
+```yaml
+# openlineage.yml
+transport:
+  type: airflow_correlator.transport.CorrelatorTransport
+  url: http://localhost:8080
+```
+
+Or via environment variable:
+
+```bash
+export OPENLINEAGE_CONFIG='{"transport":{"type":"airflow_correlator.transport.CorrelatorTransport","url":"http://localhost:8080"}}'
 ```
 
 ---
@@ -122,13 +159,23 @@ OpenLineage searches for `openlineage.yml` in these locations (in order):
 
 ## Verifying Configuration
 
-### Check Transport Registration
+### Check Transport Registration (Airflow)
+
+```bash
+# Verify the correlator transport is registered
+python -c "from importlib.metadata import entry_points; eps = entry_points(group='openlineage.transport'); print([ep.name for ep in eps if ep.name == 'correlator'])"
+# Expected: ['correlator']
+```
+
+### Check Transport Registration (Standalone)
 
 ```python
-from openlineage.client.transport import get_default_factory
+from airflow_correlator.transport import CorrelatorTransport, CorrelatorConfig
 
-factory = get_default_factory()
-print(factory._transports)  # Should include 'correlator'
+config = CorrelatorConfig(url="http://localhost:8080")
+transport = CorrelatorTransport(config)
+print(f"Transport created: {transport.kind}")
+# Expected: correlator
 ```
 
 ### Test Connection
