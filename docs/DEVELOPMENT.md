@@ -1,6 +1,7 @@
 # airflow-correlator Development Guide
 
-Welcome to airflow-correlator! This guide gets you from clone to coding in minutes with our streamlined 8-command development system.
+Welcome to airflow-correlator! This guide gets you from clone to coding in minutes with our streamlined 8-command
+development system.
 
 ---
 
@@ -15,6 +16,7 @@ make start
 ```
 
 That's it! The command will:
+
 - ✅ Install UV package manager (if needed)
 - ✅ Create virtual environment
 - ✅ Install all dependencies (dev + runtime)
@@ -28,19 +30,23 @@ That's it! The command will:
 Our development workflow is built around **8 intent-based commands** that handle everything:
 
 ### 🚀 Getting Started
+
 - **`make start`** - Begin working (setup environment + install dependencies)
 - **`make install`** - Install/update dependencies (after changing pyproject.toml)
 - **`make run`** - Execute CLI (default: shows help, or run test, run linter)
 
 ### 🛠️ Daily Development
+
 - **`make check`** - Verify code quality (format + lint + typecheck + test + security)
 - **`make fix`** - Repair issues (format + fix lints + clean artifacts)
 
 ### 🏗️ Build & Deploy
+
 - **`make build`** - Create artifacts (clean + build wheel + sdist)
 - **`make deploy`** - Verify package is ready for PyPI (local check before manual publish)
 
 ### 🔧 Maintenance
+
 - **`make reset`** - Start fresh (clean everything + reset environment)
 
 ---
@@ -90,6 +96,7 @@ deactivate
 ### 🚀 `make start` - Smart Environment Setup
 
 **Behavior**:
+
 - Checks Python 3.9+ installation
 - Installs UV package manager (if needed)
 - Creates virtual environment (`.venv/`) if it doesn't exist
@@ -102,17 +109,20 @@ deactivate
 ### 📦 `make install` - Install/Update Dependencies
 
 **Use when:**
+
 - You added a new dependency to `pyproject.toml`
 - You want to update existing dependencies
 - You need to install the package in editable mode for testing
 
 **Behavior**:
+
 - Checks that virtual environment exists (fails with helpful message if not)
 - Installs/updates dependencies from `pyproject.toml`
 - Installs package in editable mode (`-e` flag)
 - Changes to source code are immediately available
 
 **Example workflow**:
+
 ```bash
 # Add new dependency
 vim pyproject.toml           # Add: pyyaml>=6.0
@@ -127,11 +137,13 @@ python -c "import yaml; print(yaml.__version__)"
 ### 🏃 `make run` - Execute CLI (Default) or Operations
 
 **Default behavior** (consistent with Correlator):
+
 ```bash
 make run                      # Run CLI (shows help - main tool)
 ```
 
 **Testing**:
+
 ```bash
 make run test                 # All tests (unit + integration)
 make run test unit            # Unit tests only (fast)
@@ -140,6 +152,7 @@ make run coverage             # Tests with coverage report
 ```
 
 **Code Quality**:
+
 ```bash
 make run linter               # Run ruff linter
 make run typecheck            # Run mypy type checker
@@ -173,6 +186,7 @@ make build                    # Clean + build package (wheel + sdist)
 ```
 
 **Behavior:**
+
 - Cleans old distribution files from `dist/`
 - Builds wheel (`.whl`) and source distribution (`.tar.gz`)
 - Shows file sizes for verification
@@ -192,6 +206,7 @@ make deploy                   # Local release preparation:
 ```
 
 **Use when:**
+
 - Testing release process locally
 - Manual emergency releases
 - Verifying package before publishing
@@ -215,11 +230,13 @@ make reset                    # When things go wrong:
 ### Prerequisites
 
 **Required**:
+
 - **Python 3.9+** - Minimum supported version
 - **Git** - Version control
 - **UV** - Package manager (installed automatically by `make start`)
 
 **Optional**:
+
 - **make** - For convenient commands (or run commands directly)
 - **Docker** - For integration testing with [Correlator](https://github.com/correlator-io/correlator)
 - **Airflow** - For end-to-end testing
@@ -227,12 +244,14 @@ make reset                    # When things go wrong:
 ### Tech Stack
 
 **Runtime**:
+
 - **Python 3.9+** - Language
 - **Click** - CLI framework
 - **Pydantic** - Configuration management
 - **openlineage-python** - OpenLineage client
 
 **Development**:
+
 - **UV** - Fast package manager
 - **pytest** - Testing framework
 - **black** - Code formatter
@@ -253,14 +272,12 @@ make reset                    # When things go wrong:
 ### Running Tests
 
 ```bash
-# All tests (unit + integration)
-make run test
+# Unit tests only (default - integration tests are skipped)
+make run test                 # Standard development workflow
+make check                    # Full quality suite (includes unit tests)
 
-# Fast unit tests only
-make run test unit            # Fast feedback (~seconds)
-
-# Integration tests only
-make run test integration     # Requires Correlator running (~minutes)
+# Integration tests only (requires Correlator running)
+make run test integration     # See "Integration Tests" section below
 
 # Coverage reporting
 make run coverage             # With HTML report in htmlcov/
@@ -275,11 +292,16 @@ pytest tests/test_transport.py::TestCorrelatorTransportEmit -v
 pytest tests/test_transport.py --cov=airflow_correlator.transport --cov-report=term-missing
 ```
 
+> **Note:** Integration tests are skipped by default via `-m "not integration"` in `pyproject.toml`.
+> This ensures `make check` and CI/CD pipelines run only unit tests.
+
 ### Test Conventions
 
 **Unit Tests** (fast, isolated):
+
 ```python
 import pytest
+
 
 @pytest.mark.unit
 def test_create_run_event():
@@ -295,8 +317,10 @@ def test_create_run_event():
 ```
 
 **Integration Tests** (requires Correlator):
+
 ```python
 import pytest
+
 
 @pytest.mark.integration
 def test_emit_event_to_correlator():
@@ -308,6 +332,7 @@ def test_emit_event_to_correlator():
 ```
 
 **Test Fixtures** (reusable test data):
+
 ```python
 @pytest.fixture
 def sample_task_instance():
@@ -318,9 +343,86 @@ def sample_task_instance():
     mock_ti.run_id = "manual__2024-01-01T00:00:00+00:00"
     return mock_ti
 
+
 def test_with_fixture(sample_task_instance):
     result = on_task_instance_running(sample_task_instance)
     assert result is not None
+```
+
+### Integration Tests
+
+Integration tests validate the full roundtrip from transport to Correlator database. They are **intentionally excluded**
+from CI/CD pipelines and require manual execution.
+
+#### Why Integration Tests Are Not in CI/CD
+
+| Reason                  | Explanation                                                       |
+|-------------------------|-------------------------------------------------------------------|
+| **External dependency** | Tests require a running Correlator backend (Docker containers)    |
+| **Not mocked**          | Tests hit a real Correlator instance and real PostgreSQL database |
+| **Environment setup**   | Requires `psql` client and network access to Correlator           |
+| **Execution time**      | Slower than unit tests due to network I/O and database queries    |
+
+#### When to Run Integration Tests
+
+Run integration tests **locally** in these scenarios:
+
+- **Before a release** - Validate the transport works end-to-end before publishing to PyPI
+- **After a major refactor** - Ensure refactored code still integrates correctly with Correlator
+- **After fixing a transport/emitter bug** - Verify the fix works against a real backend
+- **When adding new event types** - Confirm new events are accepted and stored correctly
+- **When Correlator API changes** - Validate compatibility with updated backend
+
+#### Running Integration Tests
+
+**Prerequisites:**
+
+1. Correlator backend running (`make start` in correlator repo)
+2. PostgreSQL accessible at `localhost:5432`
+3. `psql` command available in PATH
+
+**Execution:**
+
+```bash
+# Start Correlator (in correlator repo)
+cd ../correlator && make start
+
+# Verify Correlator is running
+curl http://localhost:8080/ping  # Should return: pong
+
+# Run integration tests
+make run test integration
+```
+
+**Expected output (Correlator running):**
+
+```
+tests/integration/test_correlator_integration.py::TestCorrelatorIntegration::test_transport_emits_event_to_correlator PASSED
+tests/integration/test_correlator_integration.py::TestCorrelatorIntegration::test_complete_event_lifecycle PASSED
+tests/integration/test_correlator_integration.py::TestCorrelatorIntegration::test_api_returns_success_response PASSED
+```
+
+**Expected output (Correlator NOT running):**
+
+```
+SKIPPED [1] tests/integration/test_correlator_integration.py: ⚠️ Correlator not reachable at http://localhost:8080
+```
+
+#### Configuration
+
+Integration tests can be configured via environment variables:
+
+| Variable            | Default                                                                    | Description                                   |
+|---------------------|----------------------------------------------------------------------------|-----------------------------------------------|
+| `CORRELATOR_URL`    | `http://localhost:8080`                                                    | Correlator API base URL                       |
+| `CORRELATOR_DB_URL` | `postgres://correlator:password@localhost:5432/correlator?sslmode=disable` | PostgreSQL connection string for verification |
+
+#### Integration Test Location
+
+```
+tests/integration/
+├── __init__.py
+└── test_correlator_integration.py    # Transport → Correlator → DB roundtrip tests
 ```
 
 ---
@@ -457,6 +559,7 @@ curl http://localhost:8080/api/v1/correlation/view | jq
 ### Common Issues
 
 **🔧 UV Installation Problems**
+
 ```bash
 # Manual UV installation
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -469,6 +572,7 @@ uv --version
 ```
 
 **🐛 Virtual Environment Issues**
+
 ```bash
 # Remove and recreate
 make reset
@@ -482,6 +586,7 @@ pip install -e ".[dev]"
 ```
 
 **⚡ Test Failures**
+
 ```bash
 # Run with verbose output
 pytest -vv
@@ -497,6 +602,7 @@ pytest --showlocals
 ```
 
 **🔍 Import Errors**
+
 ```bash
 # Ensure package is installed in editable mode
 make install
@@ -512,6 +618,7 @@ pip show correlator-airflow
 ### Diagnostic Tools
 
 **Environment Check**:
+
 ```bash
 # Python version
 python --version
@@ -530,6 +637,7 @@ which python
 ```
 
 **Test Debugging**:
+
 ```bash
 # Run with debugger
 pytest --pdb
@@ -569,6 +677,7 @@ pytest --help                 # pytest options
 ### Efficient Workflows
 
 **Fast Feedback Loop**:
+
 ```bash
 # Quick CLI testing
 make run                      # Run CLI (shows help and options)
@@ -582,6 +691,7 @@ ptw -- -v                     # Re-runs tests on file change
 ```
 
 **Pre-Commit Workflow**:
+
 ```bash
 make fix                      # Auto-fix formatting and lints
 make check                    # Full quality check
@@ -590,6 +700,7 @@ git commit -s -m "minor: add feature"
 ```
 
 **Testing Specific Module**:
+
 ```bash
 # Test + coverage for single module
 pytest tests/test_transport.py \
@@ -601,12 +712,15 @@ pytest tests/test_transport.py \
 ### IDE Integration
 
 **VS Code**:
+
 ```json
 // .vscode/settings.json
 {
   "python.defaultInterpreterPath": ".venv/bin/python",
   "python.testing.pytestEnabled": true,
-  "python.testing.pytestArgs": ["-v"],
+  "python.testing.pytestArgs": [
+    "-v"
+  ],
   "python.formatting.provider": "black",
   "python.linting.enabled": true,
   "python.linting.ruffEnabled": true,
@@ -620,13 +734,16 @@ pytest tests/test_transport.py \
 ```
 
 **PyCharm**:
-- Python Interpreter: Settings → Project → Python Interpreter → Add → Virtualenv Environment → Existing → `.venv/bin/python`
+
+- Python Interpreter: Settings → Project → Python Interpreter → Add → Virtualenv Environment → Existing →
+  `.venv/bin/python`
 - Test Runner: Settings → Tools → Python Integrated Tools → Testing → Default test runner: pytest
 - Type Checker: Settings → Editor → Inspections → Python → Type checker: Mypy
 
 ### Performance Optimization
 
 **Fast Test Execution**:
+
 ```bash
 # Unit tests only (fastest feedback)
 make run test unit            # Seconds, not minutes
@@ -640,6 +757,7 @@ pytest -n auto                # Use all CPU cores
 ```
 
 **Faster Dependency Installation**:
+
 ```bash
 # UV is already fast, but you can cache aggressively
 uv pip install --cache-dir ~/.cache/uv -e ".[dev]"
