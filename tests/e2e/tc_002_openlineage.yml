@@ -1,0 +1,13 @@
+# TC-002: Configuration via openlineage.yml
+# This config file is used by tc_002_config_discovery.py
+#
+# Usage:
+#   export OPENLINEAGE_CONFIG="tests/e2e/tc_002_openlineage.yml"
+#   uv run python tests/e2e/tc_002_config_discovery.py
+
+transport:
+  # For custom transports, OpenLineage requires full module path
+  type: airflow_correlator.transport.CorrelatorTransport
+  url: http://localhost:8080
+  timeout: 30
+  verify_ssl: false

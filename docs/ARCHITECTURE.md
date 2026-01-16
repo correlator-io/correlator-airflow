@@ -128,14 +128,6 @@ def emit_events(
 - Transport catches all exceptions (fire-and-forget)
 - This ensures lineage failures never affect Airflow task execution
 
-### Configuration (`config.py`)
-
-Configuration loading utilities:
-
-- YAML config file support (`.airflow-correlator.yml`)
-- Environment variable interpolation (`${VAR_NAME}`)
-- Priority order: CLI args > env vars > config file > defaults
-
 ### CLI (`cli.py`)
 
 Minimal CLI for version info and utilities:

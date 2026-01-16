@@ -667,3 +667,127 @@ class TestEmitEventsEdgeCases:
 
         # Should still log partial success
         assert "Partial success" in caplog.text
+
+
+# =============================================================================
+# J. emit_events() Negative/Boundary Test Cases
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEmitEventsNegativeCases:
+    """Negative test cases for emit_events()."""
+
+    @responses.activate
+    def test_emit_events_empty_list(self) -> None:
+        """Empty events list sends empty JSON array."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        # Empty list should still make request
+        emit_events([], "http://localhost:8080/api/v1/lineage/events")
+
+        assert len(responses.calls) == 1
+        sent_body = json.loads(responses.calls[0].request.body)
+        assert sent_body == []
+
+    @responses.activate
+    def test_emit_events_large_batch(self) -> None:
+        """Large batch of events is sent successfully."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={
+                "status": "success",
+                "summary": {"received": 100, "successful": 100, "failed": 0},
+            },
+            status=200,
+        )
+
+        # Create 100 events
+        events = [
+            create_mock_event(run_id=f"run-{i}", job_name=f"dag.task_{i}")
+            for i in range(100)
+        ]
+        emit_events(events, "http://localhost:8080/api/v1/lineage/events")
+
+        sent_body = json.loads(responses.calls[0].request.body)
+        assert len(sent_body) == 100
+
+    @responses.activate
+    def test_emit_events_whitespace_endpoint(self) -> None:
+        """Endpoint with whitespace is trimmed or fails gracefully."""
+        # requests library handles URL with trailing whitespace
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"status": "success"},
+            status=200,
+        )
+
+        emit_events(
+            [create_mock_event()],
+            "http://localhost:8080/api/v1/lineage/events",  # No whitespace (valid)
+        )
+
+        assert len(responses.calls) == 1
+
+    @responses.activate
+    def test_emit_events_4xx_includes_response_body(self) -> None:
+        """4xx error includes response body in exception message."""
+        error_message = "Invalid eventTime format: expected ISO 8601"
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"error": error_message},
+            status=400,
+        )
+
+        with pytest.raises(ValueError, match=r"rejected.*400") as exc_info:
+            emit_events(
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
+            )
+
+        # Verify error message contains the response body
+        assert error_message in str(exc_info.value)
+
+    @responses.activate
+    def test_emit_events_5xx_includes_status_code(self) -> None:
+        """5xx error includes status code in exception message."""
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            json={"error": "Database unavailable"},
+            status=503,
+        )
+
+        with pytest.raises(ValueError, match="503"):
+            emit_events(
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
+            )
+
+    @responses.activate
+    def test_emit_events_truncates_long_error_response(self) -> None:
+        """Long error response is truncated in exception message."""
+        long_error = "x" * 1000  # Very long error message
+        responses.add(
+            responses.POST,
+            "http://localhost:8080/api/v1/lineage/events",
+            body=long_error,
+            status=400,
+        )
+
+        with pytest.raises(ValueError, match=r"rejected.*400") as exc_info:
+            emit_events(
+                [create_mock_event()],
+                "http://localhost:8080/api/v1/lineage/events",
+            )
+
+        # Should be truncated to 500 chars
+        assert len(str(exc_info.value)) < 600

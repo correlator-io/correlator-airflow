@@ -207,6 +207,7 @@ addopts = [
     "--cov-branch",
     "--strict-markers",
     "-v",
+    "-m", "not integration",  # Skip integration tests by default (run with: make run test integration)
 ]
 markers = [
     "unit: Unit tests",
