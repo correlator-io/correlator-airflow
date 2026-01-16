@@ -263,33 +263,48 @@ make reset                    # When things go wrong:
 
 ## Testing
 
+### Test Directory Structure
+
+```
+tests/
+├── conftest.py          # Shared fixtures
+├── unit/                # Unit tests (fast, isolated, mocked)
+├── integration/         # Integration tests (requires Correlator)
+└── e2e/                 # E2E tests (manual validation scripts)
+```
+
 ### Test Categories
 
-- **Unit Tests**: Fast, isolated, mocked dependencies (use `@pytest.mark.unit`)
-- **Integration Tests**: Real Airflow tasks, Correlator interaction (use `@pytest.mark.integration`)
-- **Slow Tests**: Long-running or resource-intensive (use `@pytest.mark.slow`)
+- **Unit Tests** (`tests/unit/`): Fast, isolated, mocked dependencies
+- **Integration Tests** (`tests/integration/`): Requires running Correlator backend
+- **E2E Tests** (`tests/e2e/`): Manual validation scripts for pre-release testing
 
 ### Running Tests
 
 ```bash
-# Unit tests only (default - integration tests are skipped)
-make run test                 # Standard development workflow
-make check                    # Full quality suite (includes unit tests)
+# All tests (unit only by default - integration tests are skipped)
+make run test
+
+# Unit tests only
+make run test unit
 
 # Integration tests only (requires Correlator running)
-make run test integration     # See "Integration Tests" section below
+make run test integration
+
+# E2E tests (manual validation scripts)
+make run test e2e
 
 # Coverage reporting
 make run coverage             # With HTML report in htmlcov/
 
 # Specific test file (direct pytest)
-pytest tests/test_transport.py -v
+pytest tests/unit/test_transport.py -v
 
 # Specific test function (direct pytest)
-pytest tests/test_transport.py::TestCorrelatorTransportEmit -v
+pytest tests/unit/test_transport.py::TestCorrelatorTransportEmit -v
 
 # With coverage for specific module (direct pytest)
-pytest tests/test_transport.py --cov=airflow_correlator.transport --cov-report=term-missing
+pytest tests/unit/test_transport.py --cov=airflow_correlator.transport --cov-report=term-missing
 ```
 
 > **Note:** Integration tests are skipped by default via `-m "not integration"` in `pyproject.toml`.
@@ -592,7 +607,7 @@ pip install -e ".[dev]"
 pytest -vv
 
 # Run specific test
-pytest tests/test_transport.py::TestCorrelatorTransportEmit::test_emit_calls_emit_events_with_correct_params -vv
+pytest tests/unit/test_transport.py::TestCorrelatorTransportEmit::test_emit_calls_emit_events_with_correct_params -vv
 
 # Show print statements
 pytest -s
@@ -703,7 +718,7 @@ git commit -s -m "minor: add feature"
 
 ```bash
 # Test + coverage for single module
-pytest tests/test_transport.py \
+pytest tests/unit/test_transport.py \
   --cov=airflow_correlator.transport \
   --cov-report=term-missing \
   --cov-report=html

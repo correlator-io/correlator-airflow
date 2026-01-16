@@ -215,15 +215,15 @@ run-test:
 # Run: Execute unit tests only
 run-test-unit:
 	@echo "🧪 Running unit tests..."; \
-	$(UV) run pytest -v -m unit; \
+	$(UV) run pytest tests/unit -v; \
 	EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo ""; \
 		echo "✅ Unit tests passed"; \
 	elif [ $$EXIT_CODE -eq 5 ]; then \
 		echo ""; \
-		echo "⚠️  No unit tests collected (none marked with @pytest.mark.unit)"; \
-		echo "💡 This is expected if tests are not yet marked"; \
+		echo "⚠️  No unit tests collected"; \
+		echo "💡 This is expected if tests are not yet created"; \
 	else \
 		echo ""; \
 		echo "❌ Unit tests failed"; \
@@ -234,15 +234,15 @@ run-test-unit:
 # Run: Execute integration tests only
 run-test-integration:
 	@echo "🧪 Running integration tests..."; \
-	$(UV) run pytest -v -m integration; \
+	$(UV) run pytest tests/integration -v; \
 	EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo ""; \
 		echo "✅ Integration tests passed"; \
 	elif [ $$EXIT_CODE -eq 5 ]; then \
 		echo ""; \
-		echo "⚠️  No integration tests collected (none marked with @pytest.mark.integration)"; \
-		echo "💡 This is expected for skeleton projects"; \
+		echo "⚠️  No integration tests collected"; \
+		echo "💡 This is expected if tests are not yet created"; \
 	else \
 		echo ""; \
 		echo "❌ Integration tests failed"; \

@@ -60,9 +60,8 @@ def main() -> int:
                 f"\n[PASS] Transport '{transport_class.kind}' is correctly registered"
             )
             return 0
-        else:
-            print("\n[FAIL] Transport missing required attributes")
-            return 1
+        print("\n[FAIL] Transport missing required attributes")
+        return 1
     except Exception as e:
         print(f"\n[FAIL] Failed to load transport class: {e}")
         return 1
