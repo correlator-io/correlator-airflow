@@ -49,6 +49,8 @@ run:
 		$(MAKE) run-test-unit; \
 	elif [ "$(word 2,$(MAKECMDGOALS))" = "test" ] && [ "$(word 3,$(MAKECMDGOALS))" = "integration" ]; then \
 		$(MAKE) run-test-integration; \
+	elif [ "$(word 2,$(MAKECMDGOALS))" = "test" ] && [ "$(word 3,$(MAKECMDGOALS))" = "e2e" ]; then \
+		$(MAKE) run-test-e2e; \
 	elif [ "$(filter-out $@,$(MAKECMDGOALS))" = "coverage" ]; then \
 		$(MAKE) run-coverage; \
 	elif [ "$(filter-out $@,$(MAKECMDGOALS))" = "linter" ]; then \
@@ -65,6 +67,7 @@ run:
 		echo "  make run test              # Run all tests"; \
 		echo "  make run test unit         # Run unit tests only"; \
 		echo "  make run test integration  # Run integration tests only"; \
+		echo "  make run test e2e          # Run E2E tests"; \
 		echo "  make run coverage          # Run tests with coverage report"; \
 		echo "  make run linter            # Run ruff linter"; \
 		echo "  make run typecheck         # Run mypy type checker"; \
@@ -248,6 +251,21 @@ run-test-integration:
 		exit 1; \
 	fi
 
+# Run: Execute E2E tests
+run-test-e2e:
+	@echo "🧪 Running E2E tests..."; \
+	$(UV) run python tests/e2e/run_all.py; \
+	EXIT_CODE=$$?; \
+	if [ $$EXIT_CODE -eq 0 ]; then \
+		echo ""; \
+		echo "✅ E2E tests passed"; \
+	else \
+		echo ""; \
+		echo "❌ E2E tests failed"; \
+		echo "💡 Review test failures above"; \
+		exit 1; \
+	fi
+
 # Run: Execute tests with coverage
 run-coverage:
 	@echo "🧪 Running tests with coverage..."; \
@@ -417,6 +435,7 @@ help:
 	@echo "        make run test                 # Run all tests"
 	@echo "        make run test unit            # Run unit tests only"
 	@echo "        make run test integration     # Run integration tests only"
+	@echo "        make run test e2e             # Run E2E tests"
 	@echo "        make run coverage             # Run tests with coverage"
 	@echo "        make check                    # Verify code quality"
 	@echo ""
