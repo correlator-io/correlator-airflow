@@ -8,7 +8,7 @@ Test Coverage:
     - Session configuration and usage
 """
 
-from datetime import datetime
+from enum import Enum
 from unittest.mock import patch
 
 import attr
@@ -22,7 +22,18 @@ from airflow_correlator.transport import (
 
 # =============================================================================
 # Test Fixtures
+#
+# These mocks match the real OL SDK types:
+#   - eventType: Enum (not str) — matches openlineage.client.event_v2.EventType
+#   - eventTime: str (not datetime) — the SDK uses ISO 8601 strings
 # =============================================================================
+
+
+class MockEventType(Enum):
+    """Mock EventType enum matching openlineage.client.event_v2.EventType."""
+
+    START = "START"
+    COMPLETE = "COMPLETE"
 
 
 @attr.define
@@ -44,8 +55,8 @@ class MockJob:
 class MockRunEvent:
     """Mock OpenLineage RunEvent for testing."""
 
-    eventType: str
-    eventTime: datetime
+    eventType: MockEventType
+    eventTime: str
     run: MockRun
     job: MockJob
 
@@ -53,8 +64,8 @@ class MockRunEvent:
 def create_mock_event() -> MockRunEvent:
     """Create a mock RunEvent for testing."""
     return MockRunEvent(
-        eventType="START",
-        eventTime=datetime(2024, 1, 15, 10, 30, 0),
+        eventType=MockEventType.START,
+        eventTime="2024-01-15T10:30:00",
         run=MockRun(runId="test-run-123"),
         job=MockJob(namespace="airflow", name="dag.task"),
     )

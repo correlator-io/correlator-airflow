@@ -4,7 +4,7 @@ This module handles HTTP communication with Correlator's lineage endpoint.
 Consistent with correlator-dbt emitter pattern for PDK compatibility.
 
 The emitter:
-    - Accepts RunEvent objects (serialization happens here)
+    - Accepts RunEvent objects (serialization via OL SDK's Serde)
     - Sends events to Correlator's /api/v1/lineage/events endpoint
     - Handles response codes (200/204, 207 partial success, 4xx, 5xx)
     - Raises exceptions on errors (transport layer catches them)
@@ -18,17 +18,15 @@ Requirements:
 """
 
 import logging
-from datetime import datetime
-from typing import Any, Optional, Union
-from uuid import UUID
+from typing import Optional, Union
 
-import attr
 import requests
 from openlineage.client.event_v2 import (
     DatasetEvent,
     JobEvent,
     RunEvent,
 )
+from openlineage.client.serde import Serde
 
 from airflow_correlator import __version__
 
@@ -41,31 +39,6 @@ PRODUCER = f"https://github.com/correlator-io/correlator-airflow/{__version__}"
 
 # Type alias for OpenLineage event types
 Event = Union[RunEvent, DatasetEvent, JobEvent]
-
-
-def _serialize_attr_value(
-    inst: type,  # noqa: ARG001
-    field: attr.Attribute,  # noqa: ARG001
-    value: Any,
-) -> Any:
-    """Custom serializer for attr values (matches correlator-dbt pattern).
-
-    Handles datetime and UUID serialization for JSON compatibility.
-    Used as value_serializer argument to attr.asdict().
-
-    Args:
-        inst: The attr class instance (unused, required by attr API).
-        field: The attr field being serialized (unused, required by attr API).
-        value: The value to serialize.
-
-    Returns:
-        Serialized value (ISO format for datetime, string for UUID, unchanged otherwise).
-    """
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, UUID):
-        return str(value)
-    return value
 
 
 def emit_events(
@@ -100,11 +73,10 @@ def emit_events(
     if session is None:
         session = requests.Session()
 
-    # Serialize events to dicts (matches correlator-dbt pattern)
-    event_dicts = [
-        attr.asdict(event, value_serializer=_serialize_attr_value)  # type: ignore[call-arg]
-        for event in events
-    ]
+    # Serialize events using the OL SDK's Serde, which handles Enum conversion,
+    # null stripping, and all OL-specific types. The SDK owns its type system;
+    # we delegate serialization to it rather than reimplementing.
+    event_dicts = [Serde.to_dict(event) for event in events]
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
