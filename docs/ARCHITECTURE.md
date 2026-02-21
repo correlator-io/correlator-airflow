@@ -50,10 +50,10 @@ Correlator requires events wrapped in an array (`[{event}]`), but OpenLineage's 
 │                    correlator-airflow (this plugin)                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌─────────────────────┐    ┌───────────────────┐    ┌──────────────┐   │
-│  │ CorrelatorTransport │───►│   emit_events()   │───►│ attr.asdict()│   │
-│  │ (receives RunEvent) │    │ (serializes event)│    │ (HTTP POST)  │   │
-│  └─────────────────────┘    └───────────────────┘    └──────┬───────┘   │
+│  ┌─────────────────────┐    ┌───────────────────┐    ┌───────────────┐  │
+│  │ CorrelatorTransport │───►│   emit_events()   │───►│Serde.to_dict()│  │
+│  │ (receives RunEvent) │    │ (serializes event)│    │ (HTTP POST)   │  │
+│  └─────────────────────┘    └───────────────────┘    └──────┬────────┘  │
 │                                                             │           │
 └─────────────────────────────────────────────────────────────┼───────────┘
                                                               │
@@ -98,18 +98,18 @@ Serialization and HTTP communication layer with Correlator:
 
 ```python
 def emit_events(
-    events: list[Event],  # RunEvent, DatasetEvent, or JobEvent
-    endpoint: str,
-    api_key: Optional[str] = None,
-    session: Optional[requests.Session] = None,
-    timeout: int = 30,
+        events: list[Event],  # RunEvent, DatasetEvent, or JobEvent
+        endpoint: str,
+        api_key: Optional[str] = None,
+        session: Optional[requests.Session] = None,
+        timeout: int = 30,
 ) -> None:
     """Serialize and send events to Correlator's lineage endpoint."""
 ```
 
 **Key responsibilities:**
 
-- Serializes RunEvent objects using `attr.asdict()` with custom datetime/UUID handling
+- Serializes RunEvent objects using the OL SDK's `Serde.to_dict()` (handles Enums, null stripping)
 - Wraps events in array for Correlator API format
 - Uses pre-configured HTTP session (or creates default)
 - Handles all HTTP communication
