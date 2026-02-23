@@ -2,14 +2,14 @@
 
 ## Overview
 
-`correlator-airflow` provides a **custom OpenLineage transport** that sends Airflow lineage events to Correlator for
+`airflow-correlator` provides a **custom OpenLineage transport** that sends Airflow lineage events to Correlator for
 automated incident correlation.
 
 > **IMPORTANT:** This plugin requires **Airflow 2.11.0+ ONLY**. Older Airflow versions are NOT supported.
 
 ## Architecture Approach: Custom Transport
 
-Unlike traditional Airflow plugins that implement listeners directly, `correlator-airflow` uses a **Custom OpenLineage
+Unlike traditional Airflow plugins that implement listeners directly, `airflow-correlator` uses a **Custom OpenLineage
 Transport** approach. This design decision provides significant advantages:
 
 ### Why Transport (Not Listener)?
@@ -47,7 +47,7 @@ Correlator requires events wrapped in an array (`[{event}]`), but OpenLineage's 
                                                              │
                                                              ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    correlator-airflow (this plugin)                     │
+│                    airflow-correlator (this plugin)                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌─────────────────────┐    ┌───────────────────┐    ┌───────────────┐  │
