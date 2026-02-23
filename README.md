@@ -22,7 +22,7 @@ Automatically connects Airflow task executions to incident correlation:
 
 ## Quick Start
 
-> **IMPORTANT:** Requires **Airflow 2.11.0+** and `apache-airflow-providers-openlineage>=2.0.0`
+> **IMPORTANT:** Requires **Airflow 2.11.0+** and `apache-airflow-providers-openlineage>=2.4.0`
 
 ### 1. Install
 
@@ -123,7 +123,7 @@ The current version is in early development stage, so expect possible API change
 
 - **Python 3.9+**
 - **Airflow 2.11.0+ ONLY** (older versions NOT supported)
-- `apache-airflow-providers-openlineage>=2.0.0`
+- `apache-airflow-providers-openlineage>=2.4.0`
 - [Correlator](https://github.com/correlator-io/correlator)
 
 ---

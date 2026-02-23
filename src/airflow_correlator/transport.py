@@ -14,7 +14,7 @@ Usage:
 
 Requirements:
     - Airflow 2.11.0+ ONLY (older versions NOT supported)
-    - apache-airflow-providers-openlineage>=2.0.0
+    - apache-airflow-providers-openlineage>=2.4.0
 """
 
 import logging
@@ -83,7 +83,7 @@ class CorrelatorTransport(Transport):
 
     Requirements:
         - Airflow 2.11.0+ ONLY (older versions NOT supported)
-        - apache-airflow-providers-openlineage>=2.0.0
+        - apache-airflow-providers-openlineage>=2.4.0
 
     Example openlineage.yml:
         transport:
