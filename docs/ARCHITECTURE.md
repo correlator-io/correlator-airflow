@@ -2,14 +2,14 @@
 
 ## Overview
 
-`correlator-airflow` provides a **custom OpenLineage transport** that sends Airflow lineage events to Correlator for
+`airflow-correlator` provides a **custom OpenLineage transport** that sends Airflow lineage events to Correlator for
 automated incident correlation.
 
 > **IMPORTANT:** This plugin requires **Airflow 2.11.0+ ONLY**. Older Airflow versions are NOT supported.
 
 ## Architecture Approach: Custom Transport
 
-Unlike traditional Airflow plugins that implement listeners directly, `correlator-airflow` uses a **Custom OpenLineage
+Unlike traditional Airflow plugins that implement listeners directly, `airflow-correlator` uses a **Custom OpenLineage
 Transport** approach. This design decision provides significant advantages:
 
 ### Why Transport (Not Listener)?
@@ -47,13 +47,13 @@ Correlator requires events wrapped in an array (`[{event}]`), but OpenLineage's 
                                                              │
                                                              ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    correlator-airflow (this plugin)                     │
+│                    airflow-correlator (this plugin)                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌─────────────────────┐    ┌───────────────────┐    ┌──────────────┐   │
-│  │ CorrelatorTransport │───►│   emit_events()   │───►│ attr.asdict()│   │
-│  │ (receives RunEvent) │    │ (serializes event)│    │ (HTTP POST)  │   │
-│  └─────────────────────┘    └───────────────────┘    └──────┬───────┘   │
+│  ┌─────────────────────┐    ┌───────────────────┐    ┌───────────────┐  │
+│  │ CorrelatorTransport │───►│   emit_events()   │───►│Serde.to_dict()│  │
+│  │ (receives RunEvent) │    │ (serializes event)│    │ (HTTP POST)   │  │
+│  └─────────────────────┘    └───────────────────┘    └──────┬────────┘  │
 │                                                             │           │
 └─────────────────────────────────────────────────────────────┼───────────┘
                                                               │
@@ -98,18 +98,18 @@ Serialization and HTTP communication layer with Correlator:
 
 ```python
 def emit_events(
-    events: list[Event],  # RunEvent, DatasetEvent, or JobEvent
-    endpoint: str,
-    api_key: Optional[str] = None,
-    session: Optional[requests.Session] = None,
-    timeout: int = 30,
+        events: list[Event],  # RunEvent, DatasetEvent, or JobEvent
+        endpoint: str,
+        api_key: Optional[str] = None,
+        session: Optional[requests.Session] = None,
+        timeout: int = 30,
 ) -> None:
     """Serialize and send events to Correlator's lineage endpoint."""
 ```
 
 **Key responsibilities:**
 
-- Serializes RunEvent objects using `attr.asdict()` with custom datetime/UUID handling
+- Serializes RunEvent objects using the OL SDK's `Serde.to_dict()` (handles Enums, null stripping)
 - Wraps events in array for Correlator API format
 - Uses pre-configured HTTP session (or creates default)
 - Handles all HTTP communication
@@ -185,7 +185,7 @@ export AIRFLOW__OPENLINEAGE__TRANSPORT='{"type": "correlator", "url": "http://lo
 ## Requirements
 
 - **Airflow 2.11.0+ ONLY** (older versions NOT supported)
-- `apache-airflow-providers-openlineage>=2.0.0`
+- `apache-airflow-providers-openlineage>=2.4.0`
 - `correlator-airflow` package installed
 
 ## Fire-and-Forget Pattern

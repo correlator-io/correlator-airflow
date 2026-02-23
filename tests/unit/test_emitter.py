@@ -4,30 +4,46 @@ This module tests the HTTP emitter that sends OpenLineage events to Correlator.
 
 Test Coverage:
     - PRODUCER constant format
-    - _serialize_attr_value(): Custom serializer
     - emit_events(): HTTP communication with Correlator
     - _handle_response(): Response code handling (200/204, 207, 4xx, 5xx)
+    - Real RunEvent serialization (Enum, null stripping via Serde)
 """
 
 import json
 import logging
-from datetime import datetime
-from uuid import UUID
+from enum import Enum
 
 import attr
 import pytest
 import requests
 import responses
+from openlineage.client.event_v2 import Job, Run, RunEvent
+from openlineage.client.event_v2 import RunState as EventType
+from openlineage.client.serde import Serde
 
 from airflow_correlator.emitter import (
     PRODUCER,
-    _serialize_attr_value,
     emit_events,
 )
 
 # =============================================================================
 # Test Fixtures - Mock RunEvent-like objects
+#
+# These mocks match the real OL SDK types:
+#   - eventType: Enum (not str) — matches openlineage.client.event_v2.EventType
+#   - eventTime: str (not datetime) — the SDK uses ISO 8601 strings
 # =============================================================================
+
+
+class MockEventType(Enum):
+    """Mock EventType enum matching openlineage.client.event_v2.EventType."""
+
+    START = "START"
+    RUNNING = "RUNNING"
+    COMPLETE = "COMPLETE"
+    ABORT = "ABORT"
+    FAIL = "FAIL"
+    OTHER = "OTHER"
 
 
 @attr.define
@@ -49,14 +65,14 @@ class MockJob:
 class MockRunEvent:
     """Mock OpenLineage RunEvent for testing."""
 
-    eventType: str
-    eventTime: datetime
+    eventType: MockEventType
+    eventTime: str
     run: MockRun
     job: MockJob
 
 
 def create_mock_event(
-    event_type: str = "START",
+    event_type: MockEventType = MockEventType.START,
     run_id: str = "test-run-123",
     namespace: str = "airflow",
     job_name: str = "dag.task",
@@ -64,7 +80,7 @@ def create_mock_event(
     """Create a mock RunEvent for testing."""
     return MockRunEvent(
         eventType=event_type,
-        eventTime=datetime(2024, 1, 15, 10, 30, 0),
+        eventTime="2024-01-15T10:30:00",
         run=MockRun(runId=run_id),
         job=MockJob(namespace=namespace, name=job_name),
     )
@@ -91,46 +107,84 @@ class TestProducerConstant:
 
 
 # =============================================================================
-# B. _serialize_attr_value() Tests
+# B. Serde Serialization Tests
 # =============================================================================
 
 
 @pytest.mark.unit
-class TestSerializeAttrValue:
-    """Tests for _serialize_attr_value helper function."""
+class TestSerdeSerialization:
+    """Tests that Serde.to_dict() correctly serializes OL event types.
 
-    def test_serializes_datetime_to_isoformat(self) -> None:
-        """Datetime values are serialized to ISO 8601 format."""
-        dt = datetime(2024, 1, 15, 10, 30, 0)
-        result = _serialize_attr_value(None, None, dt)
-        assert result == "2024-01-15T10:30:00"
+    These tests verify the serialization path used by emit_events():
+    Serde.to_dict() handles Enum conversion, null stripping, and
+    all OpenLineage-specific types.
+    """
 
-    def test_serializes_datetime_with_microseconds(self) -> None:
-        """Datetime with microseconds is serialized correctly."""
-        dt = datetime(2024, 1, 15, 10, 30, 0, 123456)
-        result = _serialize_attr_value(None, None, dt)
-        assert result == "2024-01-15T10:30:00.123456"
+    def test_enum_event_type_serializes_to_string(self) -> None:
+        """EventType enum is serialized to its string value by Serde."""
+        event = create_mock_event(event_type=MockEventType.COMPLETE)
+        event_dict = _serde_to_dict(event)
+        assert event_dict["eventType"] == "COMPLETE"
 
-    def test_serializes_uuid_to_string(self) -> None:
-        """UUID values are serialized to string."""
-        uid = UUID("12345678-1234-5678-1234-567812345678")
-        result = _serialize_attr_value(None, None, uid)
-        assert result == "12345678-1234-5678-1234-567812345678"
+    def test_all_event_types_serialize(self) -> None:
+        """All EventType enum values serialize to their string value."""
+        for et in MockEventType:
+            event = create_mock_event(event_type=et)
+            event_dict = _serde_to_dict(event)
+            assert event_dict["eventType"] == et.value
 
-    def test_passthrough_string_unchanged(self) -> None:
-        """String values pass through unchanged."""
-        result = _serialize_attr_value(None, None, "test_string")
-        assert result == "test_string"
+    def test_serialized_event_is_json_safe(self) -> None:
+        """Serialized event can be passed to json.dumps without error."""
+        event = create_mock_event(event_type=MockEventType.START)
+        event_dict = _serde_to_dict(event)
+        serialized = json.dumps(event_dict)
+        parsed = json.loads(serialized)
+        assert parsed["eventType"] == "START"
+        assert parsed["eventTime"] == "2024-01-15T10:30:00"
+        assert parsed["run"]["runId"] == "test-run-123"
 
-    def test_passthrough_integer_unchanged(self) -> None:
-        """Integer values pass through unchanged."""
-        result = _serialize_attr_value(None, None, 123)
-        assert result == 123
+    def test_real_run_event_serialization(self) -> None:
+        """A real OL SDK RunEvent roundtrips through Serde without error.
 
-    def test_passthrough_none_unchanged(self) -> None:
-        """None values pass through unchanged."""
-        result = _serialize_attr_value(None, None, None)
-        assert result is None
+        This is the key regression test for the Enum serialization bug:
+        RunEvent.eventType is EventType(Enum), which must be converted
+        to a string by Serde.to_dict() before json.dumps().
+        """
+        event = RunEvent(
+            eventTime="2026-02-20T12:00:00Z",
+            producer="https://github.com/correlator-io/correlator-airflow/test",
+            run=Run(runId="019c7bd3-ae04-7ef3-a3df-91516ebaa3c6"),
+            job=Job(namespace="airflow://demo", name="demo_pipeline.dbt_test"),
+            eventType=EventType.START,
+        )
+
+        # This is the exact code path in emit_events()
+        event_dict = _serde_to_dict(event)
+        serialized = json.dumps(event_dict)
+        parsed = json.loads(serialized)
+
+        assert parsed["eventType"] == "START"
+        assert parsed["run"]["runId"] == "019c7bd3-ae04-7ef3-a3df-91516ebaa3c6"
+        assert parsed["job"]["namespace"] == "airflow://demo"
+
+    def test_real_run_event_null_fields_stripped(self) -> None:
+        """Serde strips None-valued fields from real RunEvent."""
+        event = RunEvent(
+            eventTime="2026-02-20T12:00:00Z",
+            producer="https://github.com/correlator-io/correlator-airflow/test",
+            run=Run(runId="019c7bd3-ae04-7ef3-a3df-91516ebaa3c6"),
+            job=Job(namespace="airflow", name="task"),
+            eventType=None,  # None eventType
+        )
+
+        event_dict = _serde_to_dict(event)
+        # Serde strips None values
+        assert "eventType" not in event_dict
+
+
+def _serde_to_dict(event):  # type: ignore[no-untyped-def]
+    """Helper: serialize event via the same path as emit_events()."""
+    return Serde.to_dict(event)
 
 
 # =============================================================================
@@ -185,7 +239,7 @@ class TestEmitEventsSuccess:
         )
 
         event = create_mock_event(
-            event_type="COMPLETE",
+            event_type=MockEventType.COMPLETE,
             run_id="run-456",
             namespace="my-namespace",
             job_name="my-dag.my-task",
@@ -212,8 +266,8 @@ class TestEmitEventsSuccess:
         )
 
         events = [
-            create_mock_event(event_type="START", run_id="run-1"),
-            create_mock_event(event_type="COMPLETE", run_id="run-1"),
+            create_mock_event(event_type=MockEventType.START, run_id="run-1"),
+            create_mock_event(event_type=MockEventType.COMPLETE, run_id="run-1"),
         ]
         emit_events(events, "http://localhost:8080/api/v1/lineage/events")
 

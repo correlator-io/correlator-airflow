@@ -1,4 +1,4 @@
-# correlator-airflow
+# 🔗 airflow-correlator
 
 **Accelerate Airflow incident resolution with automated correlation**
 
@@ -20,9 +20,29 @@ Automatically connects Airflow task executions to incident correlation:
 
 ---
 
+## Why It Matters
+
+**The Problem:** When data pipelines fail, teams spend significant time manually hunting through Airflow logs, lineage
+graphs, and job histories to find the root cause.
+
+**What You Get:** Automated correlation between Airflow task executions and data quality test results, putting you in
+control of incidents instead of reacting to them.
+
+**Key Benefits:**
+
+- **Faster incident resolution**: Automated correlation reduces investigation time
+- **Eliminate tool switching**: One correlation view instead of navigating multiple dashboards
+- **Instant root cause**: Direct path from task failure to problematic upstream job
+- **Zero-friction setup**: Simple configuration, no code changes required
+
+**Built on Standards:** Uses OpenLineage, the industry standard for data lineage. No vendor lock-in, no proprietary
+formats.
+
+---
+
 ## Quick Start
 
-> **IMPORTANT:** Requires **Airflow 2.11.0+** and `apache-airflow-providers-openlineage>=2.0.0`
+> **IMPORTANT:** Requires **Airflow 2.11.0+** and `apache-airflow-providers-openlineage>=2.4.0`
 
 ### 1. Install
 
@@ -57,7 +77,7 @@ That's it. Your Airflow task executions are now being correlated.
 
 ## How It Works
 
-`correlator-airflow` provides a **custom OpenLineage transport** that integrates with Airflow's built-in OpenLineage
+`airflow-correlator` provides a **custom OpenLineage transport** that integrates with Airflow's built-in OpenLineage
 provider:
 
 ```
@@ -69,26 +89,6 @@ See [Architecture](docs/ARCHITECTURE.md) for technical details.
 
 ---
 
-## Why It Matters
-
-**The Problem:** When data pipelines fail, teams spend significant time manually hunting through Airflow logs, lineage
-graphs, and job histories to find the root cause.
-
-**What You Get:** Automated correlation between Airflow task executions and data quality test results, putting you in
-control of incidents instead of reacting to them.
-
-**Key Benefits:**
-
-- **Faster incident resolution**: Automated correlation reduces investigation time
-- **Eliminate tool switching**: One correlation view instead of navigating multiple dashboards
-- **Instant root cause**: Direct path from task failure to problematic upstream job
-- **Zero-friction setup**: Simple configuration, no code changes required
-
-**Built on Standards:** Uses OpenLineage, the industry standard for data lineage. No vendor lock-in, no proprietary
-formats.
-
----
-
 ## Versioning
 
 This package follows [Semantic Versioning](https://semver.org/) with the following guidelines:
@@ -96,7 +96,7 @@ This package follows [Semantic Versioning](https://semver.org/) with the followi
 - **0.x.y versions** (e.g., 0.1.0, 0.2.0) indicate **initial development phase**:
   - The API is not yet stable and may change between minor versions
   - Features may be added, modified, or removed without major version changes
-  - Not recommended for production-critical systems without pinned versions
+  - For production-critical systems, please pin a version that works in your environment
 
 - **1.0.0 and above** will indicate a **stable API** with semantic versioning guarantees:
   - MAJOR version for incompatible API changes
@@ -123,7 +123,7 @@ The current version is in early development stage, so expect possible API change
 
 - **Python 3.9+**
 - **Airflow 2.11.0+ ONLY** (older versions NOT supported)
-- `apache-airflow-providers-openlineage>=2.0.0`
+- `apache-airflow-providers-openlineage>=2.4.0`
 - [Correlator](https://github.com/correlator-io/correlator)
 
 ---

@@ -2,10 +2,10 @@
 
 ## Overview
 
-`correlator-airflow` provides a **custom OpenLineage transport** that sends Airflow lineage events to Correlator.
+`airflow-correlator` provides a **custom OpenLineage transport** that sends Airflow lineage events to Correlator.
 Configuration is done through OpenLineage's standard configuration mechanisms.
 
-> **IMPORTANT:** Requires **Airflow 2.11.0+** and `apache-airflow-providers-openlineage>=2.0.0`
+> **IMPORTANT:** Requires **Airflow 2.11.0+** and `apache-airflow-providers-openlineage>=2.4.0`
 
 ---
 
